@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ${revision} ONLY inside <parent>.version, NOT at project level -->
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-msg</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>z-msg-web</artifactId>
+    <packaging>jar</packaging>
+    <name>z-msg-web (Spring Boot REST Controllers + AutoConfiguration)</name>
+    <description>
+        Z-MSG Web 层: Spring Boot 自动配置（spring.factories 注册 MsgAutoConfiguration）
+        + REST 端点（Message / MsgTemplate / MsgBatch / MsgDeliveryLog / MsgPreference）。
+        业务模块 import 本模块即可开启消息下发 HTTP API。
+    </description>
+
+    <url>https://github.com/z-opc-foundation/z-msg/tree/main/z-msg-web</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>yuku123</id>
+            <name>yuku123</name>
+            <email>1340947819@qq.com</email>
+            <organization>z-opc-foundation</organization>
+            <organizationUrl>https://github.com/z-opc-foundation</organizationUrl>
+            <timezone>+08:00</timezone>
+            <roles>
+                <role>owner</role>
+            </roles>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/z-opc-foundation/z-msg.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/z-opc-foundation/z-msg.git</developerConnection>
+        <url>https://github.com/z-opc-foundation/z-msg</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <properties>
+        <z-boot.version>1.0.8</z-boot.version>
+        <z-util.version>1.0.10</z-util.version>
+    </properties>
+
+    <dependencies>
+        <!-- 内部 module: z-msg-core（版本由父 dependencyManagement 锁） -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-core</artifactId>
+        </dependency>
+
+        <!-- 内部工具 -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-util-core</artifactId>
+            <version>${z-util.version}</version>
+        </dependency>
+
+        <!-- z-boot: BOM 锁版本, starter 提供默认配置 -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-boot-dependencies</artifactId>
+            <version>${z-boot.version}</version>
+            <type>pom</type>
+            <scope>import</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-boot-web-starter</artifactId>
+            <version>${z-boot.version}</version>
+        </dependency>
+
+        <!-- Spring Boot Mail (web 层支持 SmtpEmailSender) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- Log4j2 API (本模块 src/main/java 含 LogManager.getLogger 调用) -->
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+        </dependency>
+    </dependencies>
+
+</project>

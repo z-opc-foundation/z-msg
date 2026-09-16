@@ -1,0 +1,1 @@
+org.springframework.boot.autoconfigure.EnableAutoConfiguration=com.zifang.z.msg.web.config.MsgAutoConfiguration
