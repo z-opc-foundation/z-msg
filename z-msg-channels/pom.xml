@@ -1,0 +1,97 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ${revision} ONLY inside <parent>.version, NOT at project level -->
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-msg</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>z-msg-channels</artifactId>
+    <packaging>jar</packaging>
+    <name>z-msg-channels (Real external channel providers)</name>
+    <description>
+        Z-MSG 外部渠道 Provider: 钉钉机器人/企业微信应用与群机器人/飞书/Slack/微信公众号与小程序订阅消息/
+        阿里云短信/腾讯云短信/SendGrid/极光推送。全部基于 JDK HTTP，不引厂商 SDK，
+        签名与请求体都有针对本地 stub server 的可复现测试。
+    </description>
+
+    <url>https://github.com/z-opc-foundation/z-msg/tree/main/z-msg-channels</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>yuku123</id>
+            <name>yuku123</name>
+            <email>1340947819@qq.com</email>
+            <organization>z-opc-foundation</organization>
+            <organizationUrl>https://github.com/z-opc-foundation</organizationUrl>
+            <timezone>+08:00</timezone>
+            <roles>
+                <role>owner</role>
+            </roles>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/z-opc-foundation/z-msg.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/z-opc-foundation/z-msg.git</developerConnection>
+        <url>https://github.com/z-opc-foundation/z-msg</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-util-core</artifactId>
+            <version>${z-util.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+        </dependency>
+
+        <!-- ============ test ============ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+</project>

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ${revision} ONLY inside <parent>.version, NOT at project level -->
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-msg</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>z-msg-ws</artifactId>
+    <packaging>jar</packaging>
+    <name>z-msg-ws (WebSocket realtime access)</name>
+    <description>
+        Z-MSG 实时接入层: 一条 WebSocket 端点 + 一次性 ticket 握手鉴权 + topic 订阅模型。
+        实现 z-msg-api 的 RealtimeTransport，被 z-msg-core 的 RealtimePublisher 自动收集，
+        业务侧除配置 ticket 密钥外零改动；站内信/IM/业务事件共用一条连接。
+        跨节点广播或 SSE 兜底请另写一个 RealtimeTransport 实现，本模块不冒充这些能力。
+    </description>
+
+    <url>https://github.com/z-opc-foundation/z-msg/tree/main/z-msg-ws</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>yuku123</id>
+            <name>yuku123</name>
+            <email>1340947819@qq.com</email>
+            <organization>z-opc-foundation</organization>
+            <organizationUrl>https://github.com/z-opc-foundation</organizationUrl>
+            <timezone>+08:00</timezone>
+            <roles>
+                <role>owner</role>
+            </roles>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/z-opc-foundation/z-msg.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/z-opc-foundation/z-msg.git</developerConnection>
+        <url>https://github.com/z-opc-foundation/z-msg</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-util-core</artifactId>
+            <version>${z-util.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
+        <!-- @ConfigurationProperties 处理 + 自动配置；版本由 spring-boot-dependencies 锁 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+        </dependency>
+
+        <!-- ============ test ============ -->
+        <!-- 端到端只走"把 jar 放进 classpath"这条真实路径：
+             z-msg-web 的自动配置扫描 core 建出 RealtimePublisher / RealtimeTicketService，
+             本模块的 MsgWsAutoConfiguration 靠 spring.factories + @ConditionalOnBean 自己挂上去。
+             如果测试里手工 @Import 这几个配置类，@ConditionalOnBean 与端点注册这两件事就没被验过。 -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-web</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <!-- 真起一个 servlet 容器跑端到端 WS 握手 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-tomcat</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

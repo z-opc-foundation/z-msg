@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- ${revision} ONLY inside <parent>.version, NOT at project level -->
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-msg</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <artifactId>z-msg-im</artifactId>
+    <packaging>jar</packaging>
+    <name>z-msg-im (Conversation / chat-room domain on top of z-msg realtime)</name>
+    <description>
+        Z-MSG IM 层: 会话（单聊/群聊/聊天室）、成员、按会话单调递增的 seq、离线增量同步、
+        已读回执、typing/presence、以及"三行代码开一个聊天室"的门面 API。
+        实时下发只依赖 z-msg-api 的 RealtimePublisher 接缝（宿主带不带 z-msg-ws 都能编译），
+        落库复用 z-msg-core 的数据源与 MyBatis-Plus 约定。
+    </description>
+
+    <url>https://github.com/z-opc-foundation/z-msg/tree/main/z-msg-im</url>
+    <licenses>
+        <license>
+            <name>MIT License</name>
+            <url>https://opensource.org/licenses/MIT</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+    <developers>
+        <developer>
+            <id>yuku123</id>
+            <name>yuku123</name>
+            <email>1340947819@qq.com</email>
+            <organization>z-opc-foundation</organization>
+            <organizationUrl>https://github.com/z-opc-foundation</organizationUrl>
+            <timezone>+08:00</timezone>
+            <roles>
+                <role>owner</role>
+            </roles>
+        </developer>
+    </developers>
+    <scm>
+        <connection>scm:git:https://github.com/z-opc-foundation/z-msg.git</connection>
+        <developerConnection>scm:git:ssh://git@github.com/z-opc-foundation/z-msg.git</developerConnection>
+        <url>https://github.com/z-opc-foundation/z-msg</url>
+        <tag>HEAD</tag>
+    </scm>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-api</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-util-core</artifactId>
+            <version>${z-util.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-boot-datasource-starter</artifactId>
+            <version>${z-boot.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+            <exclusions>
+                <!-- 只用 Log4j2：starter-logging 带来的 log4j-to-slf4j 是反向桥，
+                     和 log4j-slf4j-impl 同时在 classpath 上就是 slf4j↔log4j2 死循环 -->
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-api</artifactId>
+        </dependency>
+
+        <!-- ============ test ============ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

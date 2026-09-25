@@ -102,8 +102,17 @@ public class MsgUserPreferenceService {
         return p;
     }
 
-    public boolean delete(Long id) {
-        return preferenceMapper.deleteById(id) > 0;
+    /**
+     * 删除自己的偏好。user_id 进 WHERE，所以"忘了判归属"这种写法在这里不存在；
+     * 原来的 {@code deleteById(id)} 允许任何人拿别人的行号删掉别人的通知设置。
+     */
+    public boolean deleteOwned(Long id, Long userId) {
+        if (id == null || userId == null) {
+            return false;
+        }
+        LambdaQueryWrapper<MsgUserPreferenceDO> qw = new LambdaQueryWrapper<>();
+        qw.eq(MsgUserPreferenceDO::getId, id).eq(MsgUserPreferenceDO::getUserId, userId);
+        return preferenceMapper.delete(qw) > 0;
     }
 
     private Set<String> parseChannels(String csv) {

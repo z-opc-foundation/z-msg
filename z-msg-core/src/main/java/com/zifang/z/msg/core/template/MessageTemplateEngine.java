@@ -131,11 +131,11 @@ public class MessageTemplateEngine {
     public RenderedTemplate renderWithLocale(String bizType, String channel, String locale, Map<String, String> params) {
         TemplateEntry t = lookup(bizType, channel, locale);
         if (t == null) {
-            return new RenderedTemplate("z-opc 通知", "【z-opc】您有一条 ${bizType} 通知");
+            return new RenderedTemplate("z-opc 通知", "【z-opc】您有一条 ${bizType} 通知", null);
         }
         String subject = doRender(t.subject, params);
         String content = doRender(t.content, params);
-        return new RenderedTemplate(subject, content);
+        return new RenderedTemplate(subject, content, t.id);
     }
 
     /**
@@ -207,10 +207,19 @@ public class MessageTemplateEngine {
     public static class RenderedTemplate {
         private final String subject;
         private final String content;
+        /**
+         * 命中的模板行 id；yml 兜底模板 / 默认模板时为 null
+         */
+        private final Long templateId;
 
         public RenderedTemplate(String subject, String content) {
+            this(subject, content, null);
+        }
+
+        public RenderedTemplate(String subject, String content, Long templateId) {
             this.subject = subject;
             this.content = content;
+            this.templateId = templateId;
         }
 
         public String getSubject() {
@@ -219,6 +228,10 @@ public class MessageTemplateEngine {
 
         public String getContent() {
             return content;
+        }
+
+        public Long getTemplateId() {
+            return templateId;
         }
     }
 }

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  测试期日志配置。没有这个文件时 Log4j2 会退回默认配置（只出 ERROR），
+  端到端测试里"通道到底有没有被调用"这类关键线索就被吞掉；
+  而用 Spring Boot 默认配置又会把整个第三方栈的 DEBUG 刷满控制台。
+  这里取中间值：业务包 INFO，其余 WARN。
+-->
+<Configuration status="WARN">
+    <Appenders>
+        <Console name="Console" target="SYSTEM_OUT">
+            <PatternLayout pattern="%d{HH:mm:ss.SSS} %-5level %logger;%M:%line - %msg%n"/>
+        </Console>
+    </Appenders>
+    <Loggers>
+        <Logger name="com.zifang" level="INFO" additivity="false">
+            <AppenderRef ref="Console"/>
+        </Logger>
+        <Root level="WARN">
+            <AppenderRef ref="Console"/>
+        </Root>
+    </Loggers>
+</Configuration>

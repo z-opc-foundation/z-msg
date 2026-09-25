@@ -57,12 +57,16 @@
     <modules>
         <module>z-msg-api</module>
         <module>z-msg-core</module>
+        <module>z-msg-channels</module>
+        <module>z-msg-ws</module>
+        <module>z-msg-im</module>
         <module>z-msg-web</module>
+        <module>z-msg-example</module>
     </modules>
 
     <properties>
         <!-- CI-friendly 版本根 (发版改这一处即可) -->
-        <revision>1.0.0</revision>
+        <revision>1.1.0</revision>
 
         <maven.compiler.source>8</maven.compiler.source>
         <maven.compiler.target>8</maven.compiler.target>
@@ -79,11 +83,26 @@
 
         <!-- Maven 插件版本 -->
         <flatten-maven-plugin.version>1.7.3</flatten-maven-plugin.version>
+        <maven-enforcer-plugin.version>3.4.1</maven-enforcer-plugin.version>
         <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <!-- Log4j2 BOM 必须排在 spring-boot-dependencies 之前：
+                 多个 import BOM 冲突时 Maven 取"先声明者"，而 ${log4j2.version} 属性覆写
+                 只对 parent 生效、对 import 进来的 BOM 无效。放在后面会导致
+                 log4j-api/core/slf4j-impl 被 Boot 拉回 2.17.2，而 Boot 不认识的
+                 log4j-slf4j2-impl 仍是 ${log4j2.version} —— 同一份 org.apache.logging.slf4j
+                 包出现两个版本，启动即 NoSuchMethodError。 -->
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-bom</artifactId>
+                <version>${log4j2.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+
             <!-- Spring Boot BOM -->
             <dependency>
                 <groupId>org.springframework.boot</groupId>
@@ -109,6 +128,21 @@
                 <artifactId>z-msg-web</artifactId>
                 <version>${project.version}</version>
             </dependency>
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-msg-ws</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-msg-im</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-msg-channels</artifactId>
+                <version>${project.version}</version>
+            </dependency>
 
             <!-- z-boot BOM -->
             <dependency>
@@ -124,21 +158,58 @@
                 <groupId>io.github.yuku123</groupId>
                 <artifactId>z-util-core</artifactId>
                 <version>${z-util.version}</version>
-            </dependency>
-
-            <!-- 第三方 BOM -->
-            <dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-bom</artifactId>
-                <version>${log4j2.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
+                <exclusions>
+                    <!-- z-util-core 自带 SLF4J 2.x 的绑定 log4j-slf4j2-impl；本工程栈是
+                         Spring Boot 2.7 = slf4j-api 1.7.36，只能留 log4j-slf4j-impl。
+                         两个 jar 共用 org.apache.logging.slf4j 包名，谁先上 classpath
+                         谁赢，输的那个的 StaticLoggerBinder 会去 new 一个已被删掉的
+                         无参构造器。 -->
+                    <exclusion>
+                        <groupId>org.apache.logging.log4j</groupId>
+                        <artifactId>log4j-slf4j2-impl</artifactId>
+                    </exclusion>
+                </exclusions>
             </dependency>
         </dependencies>
     </dependencyManagement>
 
     <build>
         <plugins>
+            <!-- 日志实现的唯一性靠人记"要排除 starter-logging"是记不住的：
+                 1.0.x 就是因为漏排除，让 log4j-to-slf4j 和 log4j-slf4j-impl 同时上了 classpath。
+                 这条规则把约束钉在构建上——新模块多引一个 starter 就会在 validate 阶段红，
+                 而不是等到运行时 NoSuchMethodError / 日志成环。 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-enforcer-plugin</artifactId>
+                <version>${maven-enforcer-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>ban-competing-log-bindings</id>
+                        <phase>validate</phase>
+                        <goals><goal>enforce</goal></goals>
+                        <configuration>
+                            <rules>
+                                <bannedDependencies>
+                                    <searchTransitive>true</searchTransitive>
+                                    <excludes>
+                                        <!-- 反向桥：和 log4j-slf4j-impl 同时在 classpath 上即成环 -->
+                                        <exclude>org.apache.logging.log4j:log4j-to-slf4j</exclude>
+                                        <!-- SLF4J 2.x 绑定：与 1.7.36 的栈不同代，共用同一个 java 包 -->
+                                        <exclude>org.apache.logging.log4j:log4j-slf4j2-impl</exclude>
+                                        <!-- Boot 默认日志实现，本工程一律换 Log4j2 -->
+                                        <exclude>org.springframework.boot:spring-boot-starter-logging</exclude>
+                                        <exclude>ch.qos.logback:*</exclude>
+                                        <exclude>org.slf4j:slf4j-log4j12</exclude>
+                                        <exclude>org.slf4j:slf4j-simple</exclude>
+                                    </excludes>
+                                    <message>z-msg 只允许 Log4j2 + slf4j 1.7 一条绑定链，见 pom 顶部的日志说明</message>
+                                </bannedDependencies>
+                            </rules>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
