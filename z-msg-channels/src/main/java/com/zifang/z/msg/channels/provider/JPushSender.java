@@ -39,8 +39,6 @@ public class JPushSender extends AbstractHttpChannelSender {
     public static final String PROVIDER = "jpush";
     private static final String DEFAULT_BASE = "https://api.jpush.cn";
     private static final String PUSH_PATH = "/v3/push";
-    /** params 里被本类当控制字段消费掉的 key，不会出现在推送内容里 */
-    private static final List<String> RESERVED = Arrays.asList("alias", "tag", "platform");
 
     public JPushSender(ChannelsProperties properties, SimpleHttpClient http) {
         super(properties, http, Channels.PUSH_JPUSH, PROVIDER);

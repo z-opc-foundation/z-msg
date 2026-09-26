@@ -5,8 +5,10 @@ import com.zifang.z.msg.channels.http.SimpleHttpClient;
 import com.zifang.z.msg.channels.provider.AliyunSmsSender;
 import com.zifang.z.msg.channels.provider.DingTalkRobotSender;
 import com.zifang.z.msg.channels.provider.FeishuRobotSender;
+import com.zifang.z.msg.channels.provider.JPushSender;
 import com.zifang.z.msg.channels.provider.RecordingMockSender;
 import com.zifang.z.msg.channels.provider.SlackBotSender;
+import com.zifang.z.msg.channels.provider.TencentSmsSender;
 import com.zifang.z.msg.channels.provider.WeixinMpSender;
 import com.zifang.z.msg.channels.provider.WecomRobotSender;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -77,6 +79,23 @@ public class MsgChannelsAutoConfiguration {
     @ConditionalOnMissingBean(AliyunSmsSender.class)
     public AliyunSmsSender aliyunSmsSender(ChannelsProperties props, SimpleHttpClient http) {
         return new AliyunSmsSender(props, http);
+    }
+
+    /**
+     * 腾讯云短信：与阿里云同属 {@code SMS} 通道，靠 {@code z-msg.channel.sms.provider: tencent} 选。
+     * 两个 sender 都常驻，缺凭据的那个只会 ready()=false 被 router 跳过——不会互相顶掉。
+     */
+    @Bean
+    @ConditionalOnMissingBean(TencentSmsSender.class)
+    public TencentSmsSender tencentSmsSender(ChannelsProperties props, SimpleHttpClient http) {
+        return new TencentSmsSender(props, http);
+    }
+
+    /** 极光推送（{@code PUSH_JPUSH} 通道第一个真厂商 sender）。 */
+    @Bean
+    @ConditionalOnMissingBean(JPushSender.class)
+    public JPushSender jPushSender(ChannelsProperties props, SimpleHttpClient http) {
+        return new JPushSender(props, http);
     }
 
     // ===== 录制 mock（provider=mock 时接管；默认 provider 缺省名也是 mock，
