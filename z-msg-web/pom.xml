@@ -49,7 +49,7 @@
     </scm>
 
     <properties>
-        <z-boot.version>1.0.8</z-boot.version>
+        <z-boot.version>1.0.16</z-boot.version>
         <z-util.version>1.0.10</z-util.version>
     </properties>
 
