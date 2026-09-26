@@ -34,6 +34,9 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
   记账在进程内存里：重启后旧票在 TTL 内还能再用一次，多实例则每台各记一次（详见 README §9）。
 - 浏览器不能给 `WebSocket` 加请求头，所以身份必须进 URL；正因为它会进 access log，
   这里绝不能换成长期 JWT。服务端任何日志都不打 token 原文。
+- 同一张票也可以**在已打开的连接里**花掉（`op=auth`，见 §2），走的是同一本 `nonce` 账：
+  一张票无论走握手还是走帧，都只兑现一次。帧内的 token 反而比 URL 干净——它不会落进 access log。
+  **这条是主干行为，`op=auth` 不在任何已发布构件里（1.2.0 及以前没有这个 op），默认关闭。**
 
 状态码（`MsgWsFailClosedTest` / `MsgWsEndToEndTest` 各钉了一支）：
 
@@ -68,9 +71,41 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
 | `subscribe` | `{"op":"subscribe","clientMsgId":"s1","topics":["room:7001"]}` | 逐个授权后回 `ack`；`topics` 也可以是单个字符串 |
 | `unsubscribe` | 同上，`op` 换成 `unsubscribe` | 回 `ack`，`payload.unsubscribed` + 当前 `payload.topics` |
 | `publish` | `{"op":"publish","clientMsgId":"p1","topic":"room:7001","kind":"chat","payload":{...}}` | **默认全部拒绝**，除非有模块注册了 `TopicAuthorizationPolicy`（§4） |
+| `auth` | `{"op":"auth","clientMsgId":"a1","token":"<新 ticket>"}` | 在**不重连**的前提下重新证明身份／换到另一个身份。**默认关**，要 `z-msg.ws.inband-auth-enabled=true`；未发布（1.2.0 及以前只有上面四个 op） |
 
 `subscribe`/`unsubscribe` 的 `topics` 为空 → `WS_BAD_FRAME`；未知 `op` → `WS_OP_UNSUPPORTED`；
 非 JSON 文本 → `WS_BAD_FRAME`。**这些错误都不会关掉连接**，下一帧照旧能发能收。
+
+### `op=auth`：长连接上换身份（主干，默认关）
+
+握手之后连接的身份本来是不变的，于是"重连一次"成了唯一能重新证明身份的途径——
+移动端切账号、多账号共用一条 socket 的宿主都得断线重连、重新拉一遍 topic。
+`op=auth` 把这条路挪进帧里，语义与握手完全一致：**只认票，不认帧里自称的 userId**。
+
+```jsonc
+// 请求
+{"op":"auth","clientMsgId":"a1","token":"z-msg-ws|7102|1790...|nonce.NaMd..."}
+// 同身份续期（changed=false，没有 previousUserId / revoked）
+{"op":"ack","clientMsgId":"a1","payload":"{\"changed\":false,\"userId\":7101,\"topics\":[\"user:7101\",\"sys:broadcast\",\"room:lobby\"]}"}
+// 换成另一个身份
+{"op":"ack","clientMsgId":"a1","payload":"{\"changed\":true,\"userId\":7102,\"previousUserId\":7101,\"revoked\":[\"user:7101\"],\"topics\":[\"sys:broadcast\",\"room:lobby\",\"user:7102\"]}"}
+```
+
+四条判据，每条都有用例钉着（`MsgWsInbandAuthTest` / `WsSessionRegistryRebindTest`）：
+
+- **失败必须是无害的**：票不对／过期／已被用过 → `WS_AUTH_FAILED`（与握手 401 同一把尺，
+  三种情况**刻意不区分**），连接不断、身份不动、订阅不动。开关没开 → `WS_AUTH_DISABLED`，
+  而不是静默忽略：客户端以为换了身份其实没换，比直接报错难查十倍。
+- **旧身份的收件箱必须跟着断**：`user:<旧id>` 既在"按用户"索引里也在"按 topic"索引里，
+  只搬其中一个的话，别人发给旧用户的红点会继续投进这条自称新身份的连接。
+- **换完要按新身份重新裁决每一条已有订阅**：新身份不配持有的 topic 会被退订并原样列进
+  `revoked`。反过来说清楚**做不到**的那半：服务端没有"某用户该有哪些频道"的可枚举清单
+  （那要改 §4 的策略契约），所以**换回原身份时只有自己的收件箱会自动补回来**，
+  其余频道客户端要重新 `subscribe`——`revoked` 就是给客户端留的这份对账清单。
+- **`max-sessions-per-user` 在新用户名下重跑**：换身份等于在新用户名下多出一条连接，
+  超限时要挤掉那一名下最早的那条，而不是让一个人靠换身份攒出无上限的连接数。
+
+服务端日志记 `id / 旧id->新id / 复核后取消订阅数 / 在线数`，**不记 token**。
 
 ### 服务端 → 客户端
 
@@ -136,6 +171,8 @@ TopicAuthorizationPolicy roomPolicy(final ImMembershipService members) {
 | `WS_TOPIC_FORBIDDEN` | 订阅/退订/代发被 §4 拒；`errorMessage` 里点名 topic |
 | `WS_TOPIC_LIMIT` | 本帧会让订阅数超过 `max-topics-per-connection`，**整帧不改状态** |
 | `WS_OP_UNSUPPORTED` | 未知 `op` |
+| `WS_AUTH_DISABLED` | 收到 `op=auth` 但 `z-msg.ws.inband-auth-enabled` 没开（默认就是这一支）；`errorMessage` 点名那个配置 |
+| `WS_AUTH_FAILED` | `op=auth` 的票签名不对／已过期／已被用过（三者不区分，同握手 401）；连接与身份都不动 |
 
 ## 6. 资源上限
 

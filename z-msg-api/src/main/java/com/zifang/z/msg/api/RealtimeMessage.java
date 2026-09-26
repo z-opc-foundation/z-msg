@@ -23,6 +23,14 @@ public class RealtimeMessage implements Serializable {
      * 服务端代发（IM 侧写权限校验后转投）：{"op":"publish","topic":"room:lobby","payload":"{...}"}
      */
     public static final String OP_PUBLISH = "publish";
+    /**
+     * 带内换凭据：{"op":"auth","token":"<新 ticket>"}。
+     * <p>
+     * 存在的理由：握手票只有 60 秒有效，而连接一旦建立就再也不看票——
+     * 于是宿主既无法在长连接上"重新证明一次身份"，也无法不换连接地切到另一个身份。
+     * 默认关（{@code z-msg.ws.inband-auth-enabled}），见 {@code _doc/001_WS_PROTOCOL.md} §2。
+     */
+    public static final String OP_AUTH = "auth";
     public static final String OP_PING = "ping";
 
     // ---------- server -> client ----------

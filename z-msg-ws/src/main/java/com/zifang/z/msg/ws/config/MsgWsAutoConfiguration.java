@@ -100,8 +100,12 @@ public class MsgWsAutoConfiguration {
     public MsgWebSocketHandler msgWebSocketHandler(WsSessionRegistry registry,
                                                    TopicAuthorizer authorizer,
                                                    RealtimePublisher publisher,
-                                                   WsProperties properties) {
-        return new MsgWebSocketHandler(registry, authorizer, publisher, properties);
+                                                   WsProperties properties,
+                                                   RealtimeTicketService ticketService) {
+        // op=auth 的验票口。本类整体 @ConditionalOnBean(RealtimeTicketService.class)，
+        // 所以自动装配下这个参数不会缺；宿主自己顶掉 handler 时要么传同一个服务，
+        // 要么就让它保持 fail closed（传 null ⇒ auth 分支一律 WS_AUTH_FAILED，不做"跳过校验"）。
+        return new MsgWebSocketHandler(registry, authorizer, publisher, properties, ticketService);
     }
 
     @Bean

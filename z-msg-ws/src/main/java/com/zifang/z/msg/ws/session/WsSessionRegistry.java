@@ -42,38 +42,76 @@ public class WsSessionRegistry implements RealtimeTransport {
     public MsgWsSession register(MsgWsSession session) {
         byId.put(session.getId(), session);
         indexUser(session, true);
+        enforceSessionLimit(session);
+        return session;
+    }
+
+    /**
+     * 换身份：把一条已登记的连接从旧用户索引搬到新用户索引，并在新用户名下重跑上限挤占。
+     * <p>
+     * 只给 {@code op=auth} 用（见 {@code MsgWebSocketHandler}）。三张索引里 {@code byId} 与身份无关，
+     * {@code idsByUser} 要整个搬走，{@code idsByTopic} 只有那条由身份派生的 {@code user:<旧 id>} 要跟着断
+     * ——搬漏任一张的后果都是"旧身份还在被 {@link #deliverToUser} 命中、新身份收不到红点"，
+     * 所以改身份必须走这里，不能只调 {@link MsgWsSession} 那个包级 setter。
+     *
+     * @return 换之前的 userId；连接不在注册表里则返回 null（此时什么都没改）
+     */
+    public Long rebindIdentity(String connectionId, Long newUserId) {
+        MsgWsSession session = byId.get(connectionId);
+        if (session == null) {
+            return null;
+        }
+        Long previous = session.getUserId();
+        if (previous != null && !previous.equals(newUserId)) {
+            // 身份派生的那条订阅要跟着断。只搬 idsByUser 是不够的：deliverToUser 除了按用户索引，
+            // 还会按 {@code user:<id>} 的 topic 索引命中连接——旧用户那条 topic 还挂在连接上的话，
+            // 别人发给旧用户的红点会继续投进这条已经换成另一个身份的连接。
+            unsubscribe(connectionId, RealtimeTopics.user(previous));
+            indexUser(session, false);
+            session.setUserId(newUserId);
+            indexUser(session, true);
+        }
+        enforceSessionLimit(session);
+        return previous;
+    }
+
+    /**
+     * 同一用户超过 {@code max-sessions-per-user} 时关掉最早的那几条。
+     */
+    private void enforceSessionLimit(MsgWsSession session) {
         int limit = properties.getMaxSessionsPerUser();
-        if (limit > 0 && session.getUserId() != null) {
-            Set<String> ids = idsByUser.get(session.getUserId());
-            if (ids != null && ids.size() > limit) {
-                List<MsgWsSession> mine = new ArrayList<MsgWsSession>(ids.size());
-                for (String id : ids) {
-                    MsgWsSession s = byId.get(id);
-                    if (s != null) {
-                        mine.add(s);
-                    }
-                }
-                // 多出来的数量一次算清：连上 N 台设备又被第 N+1 台挤，只该关最老的
-                mine.sort(new java.util.Comparator<MsgWsSession>() {
-                    @Override
-                    public int compare(MsgWsSession a, MsgWsSession b) {
-                        return Long.compare(a.getOpenedAt(), b.getOpenedAt());
-                    }
-                });
-                int toClose = mine.size() - limit;
-                for (int i = 0; i < toClose && i < mine.size(); i++) {
-                    MsgWsSession oldest = mine.get(i);
-                    if (oldest.getId().equals(session.getId())) {
-                        continue;
-                    }
-                    log.info("[z-msg-ws] 超出 max-sessions-per-user={}，挤掉最早连接 id={} userId={}",
-                            limit, oldest.getId(), oldest.getUserId());
-                    unregister(oldest.getId());
-                    oldest.close();
-                }
+        if (limit <= 0 || session.getUserId() == null) {
+            return;
+        }
+        Set<String> ids = idsByUser.get(session.getUserId());
+        if (ids == null || ids.size() <= limit) {
+            return;
+        }
+        List<MsgWsSession> mine = new ArrayList<MsgWsSession>(ids.size());
+        for (String id : ids) {
+            MsgWsSession s = byId.get(id);
+            if (s != null) {
+                mine.add(s);
             }
         }
-        return session;
+        // 多出来的数量一次算清：连上 N 台设备又被第 N+1 台挤，只该关最老的
+        mine.sort(new java.util.Comparator<MsgWsSession>() {
+            @Override
+            public int compare(MsgWsSession a, MsgWsSession b) {
+                return Long.compare(a.getOpenedAt(), b.getOpenedAt());
+            }
+        });
+        int toClose = mine.size() - limit;
+        for (int i = 0; i < toClose && i < mine.size(); i++) {
+            MsgWsSession oldest = mine.get(i);
+            if (oldest.getId().equals(session.getId())) {
+                continue;
+            }
+            log.info("[z-msg-ws] 超出 max-sessions-per-user={}，挤掉最早连接 id={} userId={}",
+                    limit, oldest.getId(), oldest.getUserId());
+            unregister(oldest.getId());
+            oldest.close();
+        }
     }
 
     /**

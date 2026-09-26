@@ -13,8 +13,11 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * 一条 WebSocket 连接的服务端视图。
  * <p>
- * 存在的唯一理由是把三件事钉在同一个对象上：身份（握手时定死，之后不可变）、
- * 订阅集合、以及**发送串行化**。
+ * 存在的唯一理由是把三件事钉在同一个对象上：身份、订阅集合、以及**发送串行化**。
+ * <p>
+ * 身份来自握手票，之后只能由 {@code op=auth} 这一条路经
+ * {@link WsSessionRegistry#rebindIdentity} 改（改它必须连带把注册表的按用户索引一起搬走，
+ * 所以那个 setter 不是给业务代码用的）；任何情况下都**绝不**从帧内容里读 userId 来定身份。
  * <p>
  * 第三件不是洁癖：{@link WebSocketSession#sendMessage} 明确不是线程安全的，
  * 而这里会有多个业务线程同时往同一条连接写（站内信线程 + IM 线程 + 心跳），
@@ -24,7 +27,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public class MsgWsSession {
 
     private final String id;
-    private final Long userId;
+    private volatile Long userId;
     private final WebSocketSession raw;
     private final long openedAt;
     private final Set<String> topics = ConcurrentHashMap.newKeySet();
@@ -103,6 +106,16 @@ public class MsgWsSession {
 
     public Long getUserId() {
         return userId;
+    }
+
+    /**
+     * 只在 {@code op=auth} 验票通过后由 {@link WsSessionRegistry#rebindIdentity} 调用。
+     * <p>
+     * 刻意留包级可见：绕过注册表直接改这里会让按用户的索引停在旧身份上
+     * （旧身份继续被投递、新身份收不到红点，而 {@code onlineUsers()} 还是原来的数）。
+     */
+    void setUserId(Long userId) {
+        this.userId = userId;
     }
 
     public WebSocketSession raw() {

@@ -202,9 +202,24 @@ WS  /api/msg/ws?token=<token>      ← 握手只认这张票，签名/受众/过
 行为，1.1.0 及更早还是 TTL 内可重放，见 §9）。
 
 连上后服务端先推一帧 `ready`（含自动订阅好的 `user:<自己>` 与租户 topic），之后就是
-`subscribe` / `unsubscribe` / `publish` / `ping` 四张客户端帧和 `pong` / `ready` / `message` /
+`subscribe` / `unsubscribe` / `publish` / `ping` / `auth` 五张客户端帧和 `pong` / `ready` / `message` /
 `ack` / `error` 五张服务端帧。逐字段、错误码、资源上限、断线与并发语义都在
 [`_doc/001_WS_PROTOCOL.md`](_doc/001_WS_PROTOCOL.md)；最小前端片段在那份文档的 §8（最小前端）。
+
+`op=auth` 是**主干新增、默认关闭**的一张帧（`z-msg.ws.inband-auth-enabled=true` 才认；
+1.2.0 及以前的发布件里没有这个 op，回了就是 `WS_OP_UNSUPPORTED`）。它解决的是"票 60s 过期，
+而连接一旦建立就再也不看票"：切账号、多账号共用一条 socket 这类宿主，以前只能断线重连。
+
+```js
+ws.send(JSON.stringify({op: 'auth', clientMsgId: 'a1', token: await freshTicket()}));
+// → ack: {changed:true, userId:7102, previousUserId:7101, revoked:["user:7101"], topics:[...]}
+```
+
+用的仍是同一本一次性账（`RealtimeTicketService#consume`）：一张票无论走握手还是走帧，只兑现一次；
+失败只回 `WS_AUTH_FAILED`，**不断连接、不动身份、不动订阅**。换身份时服务端按**新身份**复核每一条
+已有订阅，不配持有的直接退订并列进 `revoked`——反过来要说清楚做不到的那半：服务端没有
+"某用户该有哪些频道"的可枚举清单，所以**换回原身份只有自己的收件箱会自动补回来**，
+其余频道客户端要按 `revoked` 重新 `subscribe`。
 
 多端同时在线由 `WsSessionRegistry` 按用户记账，超了就挤掉最老的那条
 （`max-sessions-per-user=8`，`moreSocketsThanMaxSessionsPerUserEvictsTheOldest` 真开 3 条 socket 验它）；
@@ -431,13 +446,15 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 
 **票的一次性消费**（1.2.0 起是发布件行为；1.1.0 及更早里票在 TTL 内仍可重放）：握手走 `RealtimeTicketService#consume`，一张票只换得到第一条连接，
 第二次握手 401 —— 因为票进过 URL 就会被 access log、代理日志、浏览器历史原样留下来。
+主干上 `op=auth` 花的是**同一本账**（也走 `consume`），所以"在帧里用掉一张票"不会比握手松一寸；
+反过来说，票放在帧里比放在 URL 里干净——它进不了 access log。日志侧另有守卫：
+`ticketNeverReachesTheLogsButTheRebindLineDoes` 先证捕到了那条换票日志，再断言票的签名段零命中。
 `verify` 保持纯验签、可重复调用，它**不是**安全闸门：验得通只说明"这张票是真的"，不说明"还没人用过"。
 边界照实说：记账在**进程内存**里，所以 ① 重启后旧票在 TTL 内还能再用一次 ② 多实例各记各的，
 一张票在 N 台节点上各能开一条 ③ 窗口内成功握手超过 2 万条时开始丢弃最早过期的记录（保证降级、但会 warn）。
 要跨实例严格一次，得把 jti 放进共享存储（Redis 之类），z-msg 不替你引这个依赖。
 
-**其余已知取舍**：没有 in-band `op=auth` 续期，
-超时后要重连；IM 已读游标与消息表是两处写，崩溃窗口内可能短暂偏差。
+**其余已知取舍**：IM 已读游标与消息表是两处写，崩溃窗口内可能短暂偏差。
 
 ## 10. 配置全表
 
@@ -476,7 +493,8 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 
 `z-msg.ws.*`：`enabled=true`、`path=/api/msg/ws`、`allowed-origins=[]`、`public-topics=[]`、
 `idle-timeout-seconds=120`、`max-text-message-bytes=262144`、`max-sessions-per-user=8`、
-`max-topics-per-connection=64`。
+`max-topics-per-connection=64`、`inband-auth-enabled=false`（最后一个是主干新增，
+开了才认 `op=auth`，见 §4）。
 
 `z-msg.im.*`：`enabled=true`、`default-page-size=50`、`max-page-size=200`、
 `max-members-per-conversation=500`、`max-content-length=4000`、`seq-cas-max-attempts=200`、
@@ -519,7 +537,7 @@ mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 |---|---|
 | core | `SchemaParityTest`（MySQL/H2 两份 DDL 真跑执行、同表同列）、`SenderRegistryProviderDefaultTest`（缺 provider 时兜底成 mock 且被如实标记）、`RealtimeTicketServiceTest` 11 例（签发/验签/过期/篡改之外，一次性消费那一格钉了五例：`consume` 只放行第一次、`verify` 仍可重复且**不是**安全闸门、按票记账不按用户、过期票不进账、2 万条上限真把住且超量时是降级不是拒登）、`WebhookSenderTest`、`LegacySpiAdapterTest` |
 | web | `MsgInboxApiTest` 8 例：匿名 401 而登录 200、`oneUserCannotSeeOrMutateAnotherUsersInbox`、过期项既不列表也不计红点、分页真截断且 `total` 是真的、同 `idempotencyKey` 不重复入库、自省接口如实标 mock、`ws-token` 绑当前人。`MsgAdminEndpointGateTest` 4 例：缺省时 9 条管理面请求（含挂在 `MessageController` 上的 `GET /delivery/stats`）一律 HTTP 403、403 正文里点名那个开关、非管理面端点照常答（且缺身份仍是 401 而不是被闸门顺手改成 403）、前缀匹配按路径段对齐。`MsgAdminEndpointEnabledTest` 1 例：同一批请求打开开关全 200 且返回真分页结构——这一例是前四例的对照，否则"路由压根没挂上"也能让 403 假绿 |
-| ws | 握手 fail-closed 2 例 / `enabled=false` 全撤 1 例 / 端到端 11 例（多的一例：同一张票第二次握手 401，且换一张新票同用户照样连得上） / 授权策略 4 例 / 注册表索引 1 例（8 持票 × 4 加入 × 20000 代对撞，并断言 `GENERATIONS*JOINERS` 次订阅全部成立——防止"对撞没跑满"的假绿） |
+| ws | 握手 fail-closed 2 例 / `enabled=false` 全撤 1 例 / 端到端 11 例（多的一例：同一张票第二次握手 401，且换一张新票同用户照样连得上） / 授权策略 4 例 / 注册表索引 1 例（8 持票 × 4 加入 × 20000 代对撞，并断言 `GENERATIONS*JOINERS` 次订阅全部成立——防止"对撞没跑满"的假绿） / 带内换票 8 例（主干，`inband-auth-enabled=true`：同身份续期与重放必拒、坏票不改任何状态、缺 token 判坏帧、换身份后旧用户红点断流、非本人频道按新身份复核并退订、票的签名段进不了日志）+ 默认关时 1 例（回 `WS_AUTH_DISABLED` 而其余 op 一切照旧）+ 注册表 `rebindIdentity` 4 例 |
 | im | 自动装配 6 例（含"im 的 mapper 与 core 的 mapper 落在同一个 `sqlSessionFactoryMsg`"）、禁用路径 2 例（读 `ConditionEvaluationReport` 定位到 `OnPropertyCondition` 且点名 `im.enabled`）、三态授权 7 例、两条真 socket 的实时 6 例、REST 5 例、服务层 29 例（增量同步判定量那一格三例：`hasMore` 只能来自多读的那一条、照 `nextSinceSeq` 翻到底一条不多一条不少、`minVisibleSeq` 报的是真生效的那个游标而不是客户端要的那个） |
 | example | 7 例：A 发言进 B 的帧、未放行 topic 被拒而大厅同连接可发、站内信三处同时命中、未登录 401、首页真伺服、同一个 cookie jar 里两个标签页仍是两个人，外加 `MsgAdminSurfaceCensusTest`：在这个全量装配的宿主里把活的 handler mapping 逐条过闸门，钉住"拦下 12 条 / 放行 32 条"两份清单，并先断言普查真的数到了 40+ 个映射 |
 
@@ -541,6 +559,16 @@ mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 REST 的 `水位仍是清空时的位置 <2> but was: <0>`）；摘掉探针行的截断 ⇒ 三条红，其中一条是**旧的**
 `historyIsAscendingIncrementalAndCappedInSql`，说明这一档本来就有守卫在看着。
 上面这几轮的每一支注入都是按 `cp` 副本还原、`md5` 与注入前逐字节一致后再复跑全绿的。
+
+"带内换票 `op=auth`"这一轮 7 支，6 支红在具名断言上（同样 `cp` 副本 + `md5` 逐字节还原）：
+注册表换身份时不摘旧 `user:<id>` topic ⇒ `WsSessionRegistryRebindTest.rebindMovesTheUserIndexAndKeepsEveryTopicSubscription`；
+连身份一起不搬 ⇒ 6 条红；摘掉 `inband-auth-enabled` 那道开关 ⇒ `MsgWsInbandAuthDisabledTest`；
+`consume` 换成 `verify`（票可重放）⇒ `freshTicketRenewsTheSameIdentityAndIsUsableOnlyOnce`；
+换身份后不按新身份复核订阅 ⇒ `subscriptionTheNewIdentityCannotHoldIsRevokedAndStopsDelivering`；
+把票打进日志 ⇒ `ticketNeverReachesTheLogsButTheRebindLineDoes`。
+另有两支是**量具自己的对照**，不许当成缺漏：一支摘掉"两次读之间连接被摘走"的早退守卫，
+预期就是全绿（那条窗口在本用例形状下够不着，能杀掉它的只有真造出竞态的用例）；
+一支故意让日志漏票，用来证明"日志零命中"不是因为 appender 一条都没收到。
 
 ---
 
@@ -648,7 +676,9 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
 - 管理面的**角色判定**（见 §9）：1.1.0 落的是"默认关 + 一行 yml 打开"，
   "谁能审批模板、谁能翻别人的投递日志"仍然完全由宿主前置的登录墙决定；
 - 把 jti 记账换成共享存储，做到跨实例严格一次（现在是每实例各记，见 §9）；
-- `op=auth` in-band 续期，长连接超过 60s 后换身份只能重连；
+- `op=auth` 已在主干可用（默认关，见 §4），但**换回原身份时只有自己的收件箱会自动补回来**：
+  服务端没有"某用户该有哪些频道"的可枚举清单，要做到自动恢复得给 `TopicAuthorizationPolicy`
+  加一个"列出该用户可订 topic"的口子——那是契约变更，没想清楚谁负责保证清单完整之前不开；
 - 增量同步的判定量（`hasMore`/`nextSinceSeq`/`headSeq`/`minVisibleSeq`）的 REST 形状已随 1.2.0 发出去（§6、§14），
   但它只让客户端**看得见**洞：占号 CAS 成功而随后的 INSERT 失败时，水位不会让回去，
   那个号就永久空着。写侧的 seq 回收仍然待议（要做就得连"让回去的号可能已经被更晚的写占走"一起想清楚）；

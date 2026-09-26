@@ -4,6 +4,7 @@ import com.zifang.z.msg.api.RealtimeMessage;
 import com.zifang.z.msg.api.RealtimePublisher;
 import com.zifang.z.msg.api.RealtimeTopics;
 import com.zifang.z.msg.core.json.MsgJson;
+import com.zifang.z.msg.core.realtime.RealtimeTicketService;
 import com.zifang.z.msg.ws.auth.TopicAuthorizer;
 import com.zifang.z.msg.ws.config.WsProperties;
 import com.zifang.z.msg.ws.handshake.MsgHandshakeInterceptor;
@@ -24,8 +25,11 @@ import java.util.Map;
 /**
  * z-msg-ws 的帧处理：一条连接同时承载站内信红点、聊天室帧和业务自定义事件。
  * <p>
- * 身份只在握手阶段确定一次（{@code ATTR_USER_ID}），之后每一帧都从 session 属性里取，
+ * 身份来自握手票（{@code ATTR_USER_ID}），之后每一帧都从 session 里取，
  * 绝不从帧内容里读 {@code userId}——否则任何客户端都能在帧里改成别人的 id。
+ * 唯一能改身份的入口是 {@code op=auth}：它带的仍然是**一张新的、一次性的握手票**，
+ * 走的仍然是 {@code RealtimeTicketService#consume}，所以"帧里能改身份"并不比握手松一寸；
+ * 且默认关掉（{@code z-msg.ws.inband-auth-enabled=false}）。
  * <p>
  * 协议见 {@code z-msg/_doc/001_WS_PROTOCOL.md}。
  */
@@ -37,18 +41,23 @@ public class MsgWebSocketHandler extends TextWebSocketHandler {
     private static final String ERR_FORBIDDEN = "WS_TOPIC_FORBIDDEN";
     private static final String ERR_UNSUPPORTED = "WS_OP_UNSUPPORTED";
     private static final String ERR_LIMIT = "WS_TOPIC_LIMIT";
+    private static final String ERR_AUTH_DISABLED = "WS_AUTH_DISABLED";
+    private static final String ERR_AUTH_FAILED = "WS_AUTH_FAILED";
 
     private final WsSessionRegistry registry;
     private final TopicAuthorizer authorizer;
     private final RealtimePublisher publisher;
     private final WsProperties properties;
+    private final RealtimeTicketService tickets;
 
     public MsgWebSocketHandler(WsSessionRegistry registry, TopicAuthorizer authorizer,
-                               RealtimePublisher publisher, WsProperties properties) {
+                               RealtimePublisher publisher, WsProperties properties,
+                               RealtimeTicketService tickets) {
         this.registry = registry;
         this.authorizer = authorizer;
         this.publisher = publisher;
         this.properties = properties;
+        this.tickets = tickets;
     }
 
     @Override
@@ -202,9 +211,100 @@ public class MsgWebSocketHandler extends TextWebSocketHandler {
             session.send(ack);
             return;
         }
+        if (RealtimeMessage.OP_AUTH.equals(op)) {
+            handleAuth(session, str(frame.get("token")), clientMsgId);
+            return;
+        }
         RealtimeMessage unsupported = RealtimeMessage.error(ERR_UNSUPPORTED, "未知 op: " + op);
         unsupported.setClientMsgId(clientMsgId);
         session.send(unsupported);
+    }
+
+    /**
+     * {@code {"op":"auth","token":"<新 ticket>"}} —— 在不重连的前提下重新证明一次身份。
+     * <p>
+     * 三条不可省的性质，逐条有测试钉着：
+     * <ol>
+     *   <li>票走 {@code consume}（一次性）而不是 {@code verify}，与握手同一把尺；验不过就
+     *       {@code WS_AUTH_FAILED} 且**什么都不改**——包括不断线，一次手滑的坏票不该踢掉一条好连接；</li>
+     *   <li>身份变了就把现役 topic 拿**新身份**逐条复核，不过的退订。默认授权策略里
+     *       {@code user:<旧 id>} 必然被拒，所以旧用户的红点会自动断掉，不会跟着连接走；</li>
+     *   <li>换身份要连带搬注册表的按用户索引（{@link WsSessionRegistry#rebindIdentity}），
+     *       并在新用户名下重跑 {@code max-sessions-per-user} 挤占。</li>
+     * </ol>
+     * 任何分支都不打 token 原文。
+     */
+    private void handleAuth(MsgWsSession session, String token, String clientMsgId) {
+        if (!properties.isInbandAuthEnabled()) {
+            session.send(authError(clientMsgId, ERR_AUTH_DISABLED,
+                    "带内换身份未开启，需要 z-msg.ws.inband-auth-enabled=true（默认 false）"));
+            return;
+        }
+        if (tickets == null || !tickets.isConfigured()) {
+            // 与握手同样的 fail closed：没配密钥就没有可验的票，而不是"跳过校验"
+            session.send(authError(clientMsgId, ERR_AUTH_FAILED, "实时票证未配置，无法校验 auth 帧"));
+            return;
+        }
+        if (token == null || token.trim().isEmpty()) {
+            session.send(authError(clientMsgId, ERR_BAD_FRAME,
+                    "auth 帧要带 token，形如 {\"op\":\"auth\",\"token\":\"<ws-ticket>\"}"));
+            return;
+        }
+        Long newUserId = tickets.consume(token);
+        if (newUserId == null) {
+            // 签名不对 / 已过期 / 这张票刚才已经用过 —— 三种情况刻意不区分，同握手的 401
+            session.send(authError(clientMsgId, ERR_AUTH_FAILED, "ticket 无效、已过期或已被使用"));
+            return;
+        }
+        Long before = session.getUserId();
+        boolean hadOldInbox = before != null && session.subscribes(RealtimeTopics.user(before));
+        Long previous = registry.rebindIdentity(session.getId(), newUserId);
+        if (registry.find(session.getId()) == null) {
+            // 连接在两次读之间被摘掉了（对端刚断线或被挤占），不必再往下复核与回帧
+            return;
+        }
+        boolean changed = previous != null && !previous.equals(newUserId);
+        List<String> revoked = new ArrayList<String>();
+        if (changed) {
+            // 旧身份那条 user:<旧id> 由 rebindIdentity 连带摘掉（它只在这里记账一次，好让客户端看得见）
+            if (hadOldInbox) {
+                revoked.add(RealtimeTopics.user(previous));
+            }
+            for (String topic : new ArrayList<String>(session.topics())) {
+                if (!authorizer.canSubscribe(newUserId, topic)) {
+                    registry.unsubscribe(session.getId(), topic);
+                    revoked.add(topic);
+                }
+            }
+            String ownInbox = RealtimeTopics.user(newUserId);
+            if (authorizer.canSubscribe(newUserId, ownInbox)) {
+                registry.subscribe(session.getId(), ownInbox);
+            }
+        }
+        session.touch();
+
+        Map<String, Object> payload = new java.util.LinkedHashMap<String, Object>();
+        payload.put("changed", changed);
+        payload.put("userId", newUserId);
+        if (changed) {
+            payload.put("previousUserId", previous);
+            payload.put("revoked", revoked);
+        }
+        payload.put("topics", new ArrayList<Object>(session.topics()));
+        RealtimeMessage ack = RealtimeMessage.frame(RealtimeMessage.OP_ACK);
+        ack.setClientMsgId(clientMsgId);
+        ack.setPayload(MsgJson.toJson(payload));
+        if (log.isInfoEnabled()) {
+            log.info("[z-msg-ws] 带内换票 id={} {}->{} 复核后取消订阅={} 在线={}",
+                    session.getId(), previous, newUserId, revoked.size(), registry.onlineConnections());
+        }
+        session.send(ack);
+    }
+
+    private static RealtimeMessage authError(String clientMsgId, String code, String message) {
+        RealtimeMessage err = RealtimeMessage.error(code, message);
+        err.setClientMsgId(clientMsgId);
+        return err;
     }
 
     @Override

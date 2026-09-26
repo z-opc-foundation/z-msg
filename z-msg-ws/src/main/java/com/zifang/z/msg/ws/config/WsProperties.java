@@ -66,6 +66,21 @@ public class WsProperties {
      */
     private int maxTopicsPerConnection = 64;
 
+    /**
+     * 是否接受 {@code op=auth}（在已建立的连接上换一张新票、并重绑身份与订阅）。
+     * <p>
+     * 默认关，和 {@code z-msg.web.admin-endpoints-enabled} 同一套道理：这是对既有协议的**加法语义**，
+     * 但它把"一条连接的身份"从握手时一次定死变成运行期可变，宿主如果没打算用这个能力，
+     * 就不该平白多出一条会改状态的入口。关掉时 {@code op=auth} 回 {@code WS_AUTH_DISABLED}，
+     * 其它 op 一切照旧。
+     * <p>
+     * 开着它并不削弱握手那道闸：带内的票与握手的票走同一个 {@code RealtimeTicketService#consume}，
+     * 一样是一次性的、一样验签与判过期，凭据仍必须由已认证的 HTTP 会话去
+     * {@code /api/msg/inbox/ws-token} 换。差别只在"票进的是帧体还是 URL"——进帧体反而更好，
+     * 不会被 access log 与代理日志留下来。
+     */
+    private boolean inbandAuthEnabled = false;
+
     public boolean isEnabled() {
         return enabled;
     }
@@ -131,5 +146,13 @@ public class WsProperties {
 
     public void setMaxTopicsPerConnection(int maxTopicsPerConnection) {
         this.maxTopicsPerConnection = maxTopicsPerConnection;
+    }
+
+    public boolean isInbandAuthEnabled() {
+        return inbandAuthEnabled;
+    }
+
+    public void setInbandAuthEnabled(boolean inbandAuthEnabled) {
+        this.inbandAuthEnabled = inbandAuthEnabled;
     }
 }
