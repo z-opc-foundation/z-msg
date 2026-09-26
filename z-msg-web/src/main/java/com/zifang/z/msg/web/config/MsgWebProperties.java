@@ -19,6 +19,15 @@ public class MsgWebProperties {
      */
     private boolean publishEndpointEnabled = false;
 
+    /**
+     * 管理面总开关（模板 / 批量任务 / 投递日志），默认关，判定在 {@link AdminEndpointGate}。
+     * <p>
+     * 这三组端点不带任何身份：template 的 8 个映射能增删改并审批模板，batch 的 4 个能提交群发任务，
+     * delivery 的 3 条路径能按客户端自报的 userId 翻别人的投递记录和成功率。
+     * 宿主确认调用方都在认证边界内之后再用 {@code z-msg.web.admin-endpoints-enabled=true} 打开。
+     */
+    private boolean adminEndpointsEnabled = false;
+
     public boolean isTrustedHeaderEnabled() {
         return trustedHeaderEnabled;
     }
@@ -41,5 +50,13 @@ public class MsgWebProperties {
 
     public void setPublishEndpointEnabled(boolean v) {
         this.publishEndpointEnabled = v;
+    }
+
+    public boolean isAdminEndpointsEnabled() {
+        return adminEndpointsEnabled;
+    }
+
+    public void setAdminEndpointsEnabled(boolean v) {
+        this.adminEndpointsEnabled = v;
     }
 }

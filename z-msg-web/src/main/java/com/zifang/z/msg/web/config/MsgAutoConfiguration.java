@@ -21,6 +21,8 @@ import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import javax.sql.DataSource;
 
@@ -38,6 +40,8 @@ import javax.sql.DataSource;
  *   <li>组件扫描范围从 {@code com.zifang.z.msg} 收窄到 core+web，
  *       否则宿主把示例工程放进 classpath 就会连 example 的 bean 一起扫进生产。</li>
  * </ul>
+ * 另外 1.1.0 起了管理面默认关：{@link AdminEndpointGate} 在
+ * {@code z-msg.web.admin-endpoints-enabled} 缺省时把 template/batch/delivery 三组前缀挡成 403。
  * core 层的 provider 注册表、限流器、实时发布器、异步线程池在
  * {@code MsgCoreConfiguration} 里，不在本类重复声明。
  */
@@ -95,6 +99,29 @@ public class MsgAutoConfiguration extends ModuleDataSourceTemplate {
     public MsgPrincipalResolver msgPrincipalResolver(MsgWebProperties webProperties) {
         return new TrustedHeaderPrincipalResolver(
                 webProperties.isTrustedHeaderEnabled(), webProperties.getTrustedHeaderName());
+    }
+
+    /**
+     * 管理面闸门。默认关（{@link MsgWebProperties#isAdminEndpointsEnabled()}），见 {@link AdminEndpointGate}。
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    public AdminEndpointGate adminEndpointGate(MsgWebProperties webProperties) {
+        return new AdminEndpointGate(webProperties);
+    }
+
+    /**
+     * 路径挂 {@code /**} 而不是逐个前缀：拦不拦只由 {@link AdminEndpointGate#isAdminPath} 一处判定，
+     * 少一份会跟 ADMIN_PREFIXES 漂移的重复配置。
+     */
+    @Bean
+    public WebMvcConfigurer msgAdminEndpointConfigurer(AdminEndpointGate adminEndpointGate) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(adminEndpointGate).addPathPatterns("/**");
+            }
+        };
     }
 
     /**

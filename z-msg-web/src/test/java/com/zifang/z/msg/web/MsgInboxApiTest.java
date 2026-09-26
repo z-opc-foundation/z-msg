@@ -6,14 +6,10 @@ import com.zifang.z.msg.api.MessageGateway;
 import com.zifang.z.msg.api.MessageSendResult;
 import com.zifang.z.msg.core.json.MsgJson;
 import com.zifang.z.msg.core.realtime.RealtimeTicketService;
-import org.h2.jdbcx.JdbcDataSource;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -40,36 +36,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * 每个"应当拒绝"的用例都配了一个"同样的请求换个身份就要成功"的对照，
  * 否则 404 / 空列表 / 恒 false 都能让断言假绿。
  */
-@SpringBootTest(classes = MsgInboxApiTest.TestApp.class,
+@SpringBootTest(classes = MsgWebTestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
         "z-msg.enabled=true",
         "z-msg.web.trusted-header-enabled=true",
         "z-msg.realtime.ticket-secret=integration-test-secret-0123456789abcdef",
-        "z-msg.inbox.default-page-size=50"
+        "z-msg.inbox.default-page-size=50",
+        "z.msg.test.db=msg_inbox_it"
 })
 public class MsgInboxApiTest {
 
     private static final long USER_A = 9001L;
     private static final long USER_B = 9002L;
-
-    @Configuration
-    @EnableAutoConfiguration
-    static class TestApp {
-        /**
-         * 顶掉 core 里那台硬编码 MySQL/Druid 的 dataSourceMsg。
-         * MODE=MySQL 是为了让生产用的 PaginationInnerInterceptor(DbType.MYSQL) 原样跑通，
-         * 而不是在测试里换一套方言骗过自己。
-         */
-        @Bean(name = "dataSourceMsg")
-        public DataSource dataSourceMsg() {
-            JdbcDataSource ds = new JdbcDataSource();
-            ds.setURL("jdbc:h2:mem:msg_inbox_it;MODE=MySQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE"
-                    + ";INIT=RUNSCRIPT FROM 'classpath:z-msg/sql/schema-h2.sql'");
-            ds.setUser("sa");
-            return ds;
-        }
-    }
 
     @Autowired
     private TestRestTemplate rest;
