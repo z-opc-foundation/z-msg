@@ -154,6 +154,8 @@ TopicAuthorizationPolicy roomPolicy(final ImMembershipService members) {
   心跳可能同时写，`WebSocketSession#sendMessage` 不是线程安全的。
 - 写失败（对端已关、容器已 close）不抛给业务方，而是把该连接从注册表摘掉：
   一个浏览器关掉标签页不该带走一次业务投递。
+- **`op=publish` 的那条连接自己也会收到这一帧**：`deliverToTopic` 遍历的是 topic 的全部订阅者，
+  不摘掉发送者。前端因此要按 `payload.userId` 或 `clientMsgId` 去重，否则每个自己说的话会画两遍气泡。
 - 实时推送是站内信的**增强而非前提**：`z-msg.inbox.push-realtime=false` 或宿主没引
   `z-msg-ws` 时，站内信照常落库，前端退回轮询 `/api/msg/inbox/unread-count`。
 

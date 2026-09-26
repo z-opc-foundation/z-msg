@@ -1,373 +1,562 @@
 # z-msg
 
-> **多通道消息下发抽象层** — 短信 / 邮件 / In-app / Push / Webhook / IM 统一接口
-> Java 8 + Spring Boot 2.7, 一行切换 Provider, 业务代码零修改
+> **多通道消息 + 实时下发基础设施** — 短信 / 邮件 / 站内信 / Webhook / 企微·钉钉·飞书·Slack / 微信公众号，
+> 加一层 WebSocket 实时接入，再往上就是聊天室和 IM。
+> Java 8 + Spring Boot 2.7.12，切供应商只改一行 yml，业务代码零修改。
 
-[![Maven Central](https://img.shields.io/badge/Maven%20Central-1.0.0-blue?logo=apache-maven)](https://central.sonatype.com/search?q=g:io.github.yuku123+a:z-msg*)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Maven Central](https://img.shields.io/badge/Maven%20Central-api%2Fcore%2Fweb%201.0.0-blue?logo=apache-maven)](https://central.sonatype.com/search?q=g:io.github.yuku123+a:z-msg)
 [![Java](https://img.shields.io/badge/Java-8%2B-orange)](https://openjdk.org)
-[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.x-6DB33F)](https://spring.io)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.12-6DB33F)](https://spring.io)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+
+## 发布状态（照实说）
+
+`repo1.maven.org` 实测（HEAD 请求 `.pom`）：
+
+| 构件 | 1.0.0 | 1.1.0（本仓库 `${revision}`） |
+|---|---|---|
+| `z-msg-api` / `z-msg-core` / `z-msg-web` | 200 已发布 | **404 未发布** |
+| `z-msg-channels` / `z-msg-ws` / `z-msg-im` | 404（1.1.0 新增模块） | **404 未发布** |
+
+所以现在只有两条路：
+
+1. **等 1.1.0 发布**（`deploy_maven_center.sh` 已备好，缺一次人工放行）；
+2. **本地 install 后用**：`cd z-msg && mvn -B -DskipTests install`，然后在宿主里按下面的坐标引 `1.1.0`。
+
+> ⚠️ **不要用 `z-boot-msg-starter`。** 它 1.0.11~1.0.14 在 Central 上都在，但 pom 里写死只引
+> `z-msg-web:1.0.0`（实测），既没有 `ws`/`im`/`channels`，也还是那个收件箱靠调用方自称 userId 的旧读侧
+> ——见 §14 迁移。
 
 ---
 
-## 🚀 5 分钟接入
+## 这层能替你干什么
 
-### 方式一：仅用 SPI 接口（最小依赖，零 Spring）
+| 你想要的 | 引哪个模块 | 你要写的代码 |
+|---|---|---|
+| 一句 `gateway.send(...)` 把一条业务事件投到 N 个渠道 | `z-msg-core` | 0 行（配置驱动） |
+| 系统站内信：落库 + 未读红点 + 列表/详情/已读/删除 | `z-msg-core` + `z-msg-web` | 1 行 `send(IN_APP)` |
+| WebSocket 接入（握手鉴权、订阅、多端、心跳、背压上限） | `z-msg-ws` | 1 个 `MsgPrincipalResolver` bean |
+| 五分钟搭出聊天室 | `z-msg-ws` + 1 个授权策略 | 一个 `TopicAuthorizationPolicy` |
+| 微信式 IM（会话/成员/seq/已读回执/未读汇总/离线增量） | `z-msg-im` | 0 行（引 jar 即自动装配） |
+| 对接企微 / 钉钉 / 飞书 / Slack / 公众号 / 阿里云短信 | `z-msg-channels` | 0 行（一段 yml） |
+
+---
+
+## 模块结构
+
+8 个 Maven 模块（`${revision}` + flatten，parent 自给自足）；测试数取自最近一次
+`mvn -B -o clean verify` 全绿结果，**总计 168 例、0 失败 0 跳过**（本轮五支管理面用例 + 一支普查）。
+
+| 模块 | 职责 | 测试 |
+|---|---|---|
+| `z-msg-api` | 纯 SPI 与常量：`MessageGateway` / `Message` / `Channels` / `RealtimePublisher` / `TopicAuthorizationPolicy`，零实现零 Spring | — |
+| `z-msg-core` | 默认 provider（mock / SMTP）、`ChannelRouter`、限流、重试、模板、投递日志、批量、站内信读写侧、7 张表的 DDL | 21 |
+| `z-msg-channels` | 真实外部渠道 provider：钉钉/企微/飞书/Slack 群机器人、公众号模板消息、阿里云短信、录制 mock | 57 |
+| `z-msg-web` | REST Controller + `MsgAutoConfiguration`（`spring.factories`）+ 身份接缝 + 管理面闸门 `AdminEndpointGate` | 13 |
+| `z-msg-ws` | WebSocket 实时接入层：短期票握手、帧协议、topic 订阅、三态授权、在线注册表 | 18 |
+| `z-msg-im` | 会话/成员/消息/已读回执域，seq 分配与增量同步，自带 4 张表与 REST | 52 |
+| `z-msg-example` | 能跑的大厅聊天室 + 站内信宿主（**不进发布清单**），顺带承载端点普查 | 7 |
+
+深入文档各就各位，本 README 只讲清边界与入口：
+
+- 实时协议逐帧说明 → [`_doc/001_WS_PROTOCOL.md`](_doc/001_WS_PROTOCOL.md)
+- 渠道/签名/超时/待核对项 → [`z-msg-channels/README.md`](z-msg-channels/README.md)
+- 五分钟跑起来、宿主四个文件 → [`z-msg-example/README.md`](z-msg-example/README.md)
+
+---
+
+## 1. 依赖与最小配置
 
 ```xml
 <dependency>
     <groupId>io.github.yuku123</groupId>
-    <artifactId>z-msg-api</artifactId>
-    <version>1.0.0</version>
+    <artifactId>z-msg-web</artifactId>   <!-- 站内信 + HTTP 面 -->
+    <version>1.1.0</version>
+</dependency>
+<dependency>
+    <groupId>io.github.yuku123</groupId>
+    <artifactId>z-msg-ws</artifactId>    <!-- WebSocket 实时 -->
+    <version>1.1.0</version>
+</dependency>
+<dependency>
+    <groupId>io.github.yuku123</groupId>
+    <artifactId>z-msg-im</artifactId>    <!-- 聊天室 / IM 域 -->
+    <version>1.1.0</version>
+</dependency>
+<dependency>
+    <groupId>io.github.yuku123</groupId>
+    <artifactId>z-msg-channels</artifactId> <!-- 真实厂商 -->
+    <version>1.1.0</version>
 </dependency>
 ```
 
+`z-msg-web` / `z-msg-ws` / `z-msg-im` / `z-msg-channels` 各带一份 `META-INF/spring.factories`，
+放进 classpath 就装配，宿主不需要 `@Import`。`z-msg-core` 没有自己那份——它的
+`MsgCoreConfiguration`（provider 注册表、限流器、实时发布器、线程池）由 web 的
+`@ComponentScan({"com.zifang.z.msg.core", "com.zifang.z.msg.web"})` 带进来；只想引 core 不引 web
+的宿主，自己 `@Import(MsgCoreConfiguration.class)`。
+
+```yaml
+z-msg:
+  enabled: true
+  realtime:
+    ticket-secret: ${MSG_TICKET_SECRET}   # 不配就 fail closed：换票回业务 code 503，握手 HTTP 503
+  sms:
+    provider: aliyun                      # 缺省 mock
+  email:
+    provider: smtp                        # 缺省 mock
+  channel:
+    im-dingtalk: { provider: robot, token: ${DING_TOKEN}, secret: ${DING_SECRET} }
+
+# 数据源走 z-boot 的 ModuleDataSourceTemplate：z-msg 只用自己的库，键名如下
+z:
+  base:
+    db:
+      msg: { host: 127.0.0.1, port: 3306, database: msg, username: ${MSG_DB_USER}, password: ${MSG_DB_PASS} }
+```
+
+`dataSourceMsg` 带 `@ConditionalOnMissingBean(name="dataSourceMsg")`，宿主可以自己顶一个
+（演示宿主就是这么塞 H2 的），但顶完必须保证 `sqlSessionFactoryMsg` 仍指向它——见 §2。
+
+## 2. 装配契约（改坏就全盘坏，写在这是为了别踩）
+
+| 契约 | 内容 |
+|---|---|
+| `dataSourceMsg` / `sqlSessionFactoryMsg` | **bean 名是契约**。core 的 mapper 与 im 的 mapper 都 `sqlSessionFactoryRef="sqlSessionFactoryMsg"`，两套 mapper 必须落在同一个 SqlSessionFactory 上——`ImAutoConfigurationTest` 直接断言这一点。 |
+| 两套 `@MapperScan` | web 的那份只覆盖 `com.zifang.z.msg.core.domain.mapper`；`z-msg-im` 靠自己的 `spring.factories` + 自己的 `@MapperScan` 自注册。**删掉那行 spring.factories 注册，im 全部 bean 消失**，`ImDisabledAutoConfigurationTest` 的对照组钉着这条。 |
+| `msgMybatisPlusInterceptor` | 分页插件 bean 名同样是契约，宿主已有 MP 配置时要顶掉而不是并存。 |
+| 条件装配顺序 | `MsgImAutoConfiguration` 用 `@ConditionalOnClass(name=...)` + 属性开关，**不用** `@ConditionalOnBean`：实测 `@Bean`-less 的自动配置类上 `@ConditionalOnBean(name="sqlSessionFactoryMsg")` 永远不匹配（`ConfigurationClassPostProcessor` 解析它时还没有任何自动配置 `@Bean` 定义）。已知不完美：它守的是"类在不在"，不是"bean 在不在"，类注释里写着。 |
+| 表结构 | 随 jar 走：`classpath:z-msg/sql/schema-h2.sql`、`classpath:z-msg/sql/im-schema-h2.sql`（MySQL 版同目录）。 |
+| 扫描范围收窄 | web 的 `@ComponentScan` 只覆盖 `core` + `web` 两个包，**不是** `com.zifang.z.msg` 全包：宿主把演示/实验模块放进 classpath 时，它们的 bean 不会被扫进生产。 |
+
+## 3. 系统站内信
+
+写侧是业务代码本体，一句：
+
 ```java
-import com.zifang.z.msg.api.MessageGateway;
-import com.zifang.z.msg.api.EmailMessage;
-import com.zifang.z.msg.api.MessageSendResult;
+@Resource private MessageGateway gateway;
 
-// 业务代码只依赖 MessageGateway 抽象，不绑死任何 Provider
-public class NotificationService {
-    private final MessageGateway gateway;
-
-    public NotificationService(MessageGateway gateway) {
-        this.gateway = gateway;       // 由 z-msg-core 提供默认实现
-    }
-
-    public MessageSendResult sendWelcome(String to) {
-        EmailMessage msg = EmailMessage.builder()
-                .to(to)
-                .subject("欢迎加入")
-                .body("感谢注册...")
-                .build();
-        return gateway.send(msg);
-    }
+public void onOrderShipped(long userId, String orderNo) {
+    gateway.send(Message.builder()
+            .channel(Channels.IN_APP)
+            .userId(Long.valueOf(userId))
+            .bizType("ORDER_SHIPPED")
+            .msgType("NOTICE")                 // 自由字符串，DB 默认 'NOTICE'；收件箱按它分 tab
+            .subject("订单已发货")
+            .content("订单 " + orderNo + " 已交付承运商")
+            .linkUrl("/orders/" + orderNo)
+            .build());
 }
 ```
 
-### 方式二：完整接入（API + Core + Web）
+`IN_APP` 的 provider 是 `db`（实现类 `InAppChannel`）：落库之后**同一次调用**里顺带往 `user:<id>`
+推一帧 `kind=inbox`，在线的人红点当场加一，不在线的什么都不缺
+（`z-msg.inbox.push-realtime=false` 可关）。
+实时只是增强，不是前提：没有 transport 时 `publish` 返回 0 且不抛异常。
 
-```xml
-<dependency>
-    <groupId>io.github.yuku123</groupId>
-    <artifactId>z-msg-web</artifactId>
-    <version>1.0.0</version>
-</dependency>
+读侧 8 个端点见 §8 端点全表。三件事是 1.1.0 刻意做的，别绕过去：
+
+- **`userId` 不是入参**。所有读侧方法只吃 `MsgPrincipalResolver` 解出来的当前登录人，WHERE 里恒定
+  `user_id = 当前人`，越权不是"忘了判"而是"写不出"。
+- **列表不带正文**。`content` 是 CLOB，列表只取展示列（`MsgInboxService#pageMine` 的显式投影），
+  点进去再走 `/inbox/detail?id=`。
+- **过期与软删不计红点**。`unread-count` 与 `list` 共用同一套 alive 过滤；删除一律 `deleted=1`，
+  `/delete-all` 不再是物理删。
+
+## 4. WebSocket 接入
+
+浏览器的 `WebSocket` 构造方法带不上自定义头（cookie 会带，但 JWT 走的是 `Authorization` 头），
+所以握手身份走**短期票**：
+
+```
+GET /api/msg/inbox/ws-token        ← 已认证的 HTTP（session / JWT 由宿主 resolver 解）
+   → { success: true, data: { token: "<HMAC>", expiresInSeconds: 60 } }
+WS  /api/msg/ws?token=<token>      ← 握手只认这张票，签名/受众/过期任一不过 → 401
+```
+
+连上后服务端先推一帧 `ready`（含自动订阅好的 `user:<自己>` 与租户 topic），之后就是
+`subscribe` / `unsubscribe` / `publish` / `ping` 四张客户端帧和 `pong` / `ready` / `message` /
+`ack` / `error` 五张服务端帧。逐字段、错误码、资源上限、断线与并发语义都在
+[`_doc/001_WS_PROTOCOL.md`](_doc/001_WS_PROTOCOL.md)；最小前端片段在那份文档的 §8（最小前端）。
+
+多端同时在线由 `WsSessionRegistry` 按用户记账，超了就挤掉最老的那条
+（`max-sessions-per-user=8`，`moreSocketsThanMaxSessionsPerUserEvictsTheOldest` 真开 3 条 socket 验它）；
+每连接 topic 上限 64 由 handler 拒绝越界的 `subscribe`（用例把上限压到 4 验截断）。
+空闲 120s 与单帧 256 KiB 是设进容器的 `setMaxSessionIdleTimeout` / `setMaxTextMessageBufferSize`，
+属容器行为，没有专门用例钉。
+
+## 5. 五分钟聊天室
+
+大厅只有一个 topic 和一段策略。**写侧默认全拒**——`op=publish` 是"让服务端代发"的口子，
+没有策略放行时任何 topic 都不能发，所以搭聊天室要显式说清放开哪一个：
+
+```java
+@Component
+public class LobbyChatPolicy implements TopicAuthorizationPolicy {
+
+    private final WsProperties wsProperties;                       // 判据取自配置，不再抄一遍 "room:lobby"
+
+    public LobbyChatPolicy(WsProperties wsProperties) { this.wsProperties = wsProperties; }
+
+    @Override public boolean supports(String topic) {              // 只管配置里声明为公共的那些 room:
+        return RealtimeTopics.isRoom(topic) && wsProperties.getPublicTopics().contains(topic);
+    }
+    @Override public Boolean allowSubscribe(Long userId, String topic) { return userId == null ? null : Boolean.TRUE; }
+    @Override public Boolean allowPublish(Long userId, String topic)   { return userId == null ? null : Boolean.TRUE; }
+    @Override public int order() { return 10; }
+}
 ```
 
 ```yaml
-# application.yml
-z:
-  msg:
-    enabled: true                       # 由 z-boot-msg-starter 控制（推荐）
-    channels:
-      - email
-      - sms
-      - in-app
-      - push
-      - webhook
-    email:
-      smtp-host: smtp.example.com
-      smtp-port: 587
-      username: ${SMTP_USER}
-      password: ${SMTP_PASS}
-    sms:
-      provider: mock                    # aliyun / tencent / mock
+z-msg:
+  ws:
+    public-topics: [room:lobby]
 ```
+
+判据取 `WsProperties.getPublicTopics()` 而不是在策略里硬写 `"room:lobby"`：宿主改了 yml 而策略还认
+老 topic 的话，症状是"连上了但没人说话"，最难查。不认识的 topic 一律返回 `null` 而不是 `FALSE`——
+返回 `FALSE` 会把 `z-msg-im` 那种按成员表判其它房间的策略一起否掉。
+
+三态（`TRUE` 放行 / `FALSE` 拒绝 / `null` 不表态）而不是布尔，是因为一条连接上会同时挂着
+自己的收件箱、群聊、租户公告，没有哪个模块能单独判完；任一策略 `FALSE` 即拒，全部不表态才落到
+传输层默认（只允许订 `user:<自己>` 和配置里声明的公共 topic）。
+
+跑起来的完整版本在 `z-msg-example`：两条真 WebSocket、两个登录身份、A 打字 B 立刻看到，
+由 `MsgExampleApplicationTest` 在无 mock 的情况下钉住。
+
+## 6. 微信式 IM
+
+`z-msg-im` 就是"聊天"这件事的域模型，引 jar 即得 18 个 REST 端点 + 实时行为：
+
+| 能力 | 靠什么做到 |
+|---|---|
+| 单聊幂等、群聊、成员与角色 | `single(me, peer, tenant)` 靠 `uk_im_conv_pair` 保证两人只会有一个会话；成员/角色/禁言走成员表 |
+| 消息有序、可增量同步 | 会话内 `seq` 由服务端 CAS 分配（`uk_im_msg_conv_seq`），客户端只按 `sinceSeq` 拉增量 |
+| 重发不产生两条 | `clientMsgId` 唯一键 `uk_im_msg_conv_client`，命中时返回既有那行（`seq` 不变） |
+| 已读 / 未读 / 回执 | `last_read_seq` + `uk_im_receipt_conv_user`，未读汇总按会话返回 |
+| 服务端署名 | 发言落库时 `sender_user_id` 与 `seq` 都由服务端写——这是它和"大厅自报 from"的区别 |
+| 别人订不到你的房间 | `ImTopicAuthorizationPolicy` 按成员表判 `room:`，非成员 `FALSE`，且**不影响**大厅放行 |
+
+`ImMessageService#send` 的完整签名：
 
 ```java
-@SpringBootApplication
-public class MyApplication {
-    public static void main(String[] args) {
-        SpringApplication.run(MyApplication.class, args);
-    }
-    // z-msg-web 通过 spring.factories 自动注册 MsgAutoConfiguration
-    // 自动暴露: /api/msg/send, /api/msg/template, /api/msg/batch ...
-}
+ImMessageDO send(Long conversationId, Long senderUserId, String msgType, String content,
+                 String clientMsgId, List<Long> atUserIds, Long replyToSeq);
 ```
 
-### 方式三：通过 z-boot 聚合 starter（推荐）
+## 7. 外部渠道对接
 
-```xml
-<!-- 只需 import 一个 z-boot-msg-starter，自动拿到 z-msg-api + z-msg-core + z-msg-web -->
-<dependency>
-    <groupId>io.github.yuku123</groupId>
-    <artifactId>z-boot-msg-starter</artifactId>
-    <!-- version 由 z-boot-dependencies BOM 锁 -->
-</dependency>
+`z-msg-channels` 把 `ChannelSender` SPI 落到真实厂商，全部 JDK `HttpURLConnection`，
+不引厂商 SDK、不引 OkHttp，每家都有本地 stub server 的离线测试。
+
+| channel | provider | 实现类 | 状态 |
+|---|---|---|---|
+| `SMS` | `aliyun` | `AliyunSmsSender` | ✅ RPC 签名向量离线钉死 |
+| `EMAIL` | `smtp` | `SmtpEmailSender`（core） | ✅ |
+| `IN_APP` | `db` | `InAppChannel`（core） | ✅ |
+| `WEBHOOK` | `http` | `WebhookSender` | ✅ |
+| `IM_WECOM` / `IM_DINGTALK` / `IM_FEISHU` | `robot` | 群机器人三家 | ✅ |
+| `IM_SLACK` | `bot` | `SlackBotSender` | ✅ |
+| `IM_WEIXIN_MP` | `mp` | `WeixinMpSender` | ✅ token 缓存 + 过期重取 |
+| `IM_WEIXIN_MINI` / `PUSH_FCM` / `PUSH_APNS` / `PUSH_WEB` / `PUSH_JPUSH` / `REALTIME` | — | **常量有、厂商 sender 无** | ⚠️ 落到 `MockFallbackSender` |
+
+最后那行是这个表存在的原因：`GET /api/msg/channel/list` 每条通道返回
+`real` / `ready` / `enabled` / `providers` / `activeProvider` / `configuredProvider` /
+`fallbackChannels`，`GET /api/msg/channel/detail?channel=` 再补 `selected`（选中的实现类）与
+`selectedIsMock`。**假成功在自省接口里是看得见的**（`real:false`、`selectedIsMock:true`），
+`channelIntrospectionLabelsMockProvidersHonestly` 钉着这条。
+腾讯云、SendGrid、极光的形状照 `AliyunSmsSender` + 测试模板补即可；
+各家的未支持项与待核对点（含飞书签名形状）逐条列在
+[`z-msg-channels/README.md`](z-msg-channels/README.md)。
+
+一个业务事件同时投多通道，走 `fanOut`（偏好过滤 + 静默时段 + 限流 + 模板渲染 + 重试 + 投递日志）：
+
+```java
+Map<String, String> receivers = new HashMap<String, String>();
+receivers.put(Channels.SMS, "13800000000");
+receivers.put(Channels.EMAIL, "a@b.com");
+receivers.put(Channels.IM_DINGTALK, "robot-key");
+
+FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers,
+        params, "zh_CN");
 ```
 
----
+## 8. REST 端点全表
 
-## 📦 模块说明
+响应统一 `com.zifang.util.core.meta.Result`：`{ success, code, message, data }`
+（字段名是 `message`，不是 `msg`）。
 
-| 模块 | 说明 | 何时该引入 |
+**站内信** — 全部要求已认证，未认证 401：
+
+| 方法 | 路径 |
+|---|---|
+| GET | `/api/msg/inbox/list?page=&size=&unreadOnly=&msgType=` |
+| GET | `/api/msg/inbox/unread-count` |
+| GET | `/api/msg/inbox/detail?id=` |
+| POST | `/api/msg/inbox/read?id=` |
+| POST | `/api/msg/inbox/read-all` |
+| DELETE | `/api/msg/inbox/delete?id=` |
+| DELETE | `/api/msg/inbox/delete-all` |
+| GET | `/api/msg/inbox/ws-token` |
+
+**IM**（`/api/msg/im/...`，全 POST，全要求已认证）：
+
+| 前缀 | 端点 |
+|---|---|
+| `conversation` | `/list` `/single` `/group` `/members` `/member/add` `/member/remove` `/member/role` `/leave` `/mute` `/clear` |
+| `message` | `/send` `/history` `/at` `/head` |
+| `read` | `/mark` `/unread` `/summary` `/receipts` |
+
+请求体键名：`conversationId, content, msgType, clientMsgId, atUserIds, replyToSeq, sinceSeq, seq,
+size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, userIds, role, muted, lastReadSeq`。
+
+**偏好 / 通道 / 事件 / 管理面**：
+
+| 方法 | 路径 | 认证 |
 |---|---|---|
-| `z-msg-api` | 纯 SPI（MessageGateway / EmailSender / SmsSender / MessageBus / Channels） | 想自己实现 Provider 的项目 |
-| `z-msg-core` | 默认实现（Mock/Smtp + ChannelRouter + RateLimiter + 7 DO 实体） | 任何业务模块 |
-| `z-msg-web` | Spring Boot Controller + AutoConfiguration（spring.factories） | 想开箱即用 HTTP API 的项目 |
+| POST | `/api/msg/preference/upsert` | ✅ 只作用在当前人 |
+| GET | `/api/msg/preference/my` | ✅ |
+| DELETE | `/api/msg/preference/{id}` | ✅ |
+| GET | `/api/msg/channel/list` | ❌ 无需身份；实测不回传任何密钥 |
+| GET | `/api/msg/channel/detail?channel=` | ❌ |
+| POST | `/api/msg/publish?eventType=&userId=` | ❌ **默认关**（`z-msg.web.publish-endpoint-enabled=false`）。关着时实测 HTTP 200 + 业务 `code:403`，不是 HTTP 403 |
+| POST | `/api/msg/template/list` · `POST /api/msg/template`（建）· `/api/msg/template/{id}`（GET/PUT/DELETE）· `/{id}/approve` · `/{id}/reject` · `/cache/refresh` | ❌ **默认关**：8 个映射一律真 HTTP 403，见 §9 |
+| POST | `/api/msg/batch/submit` · `/api/msg/batch/list` · `/api/msg/batch/{id}/cancel`，GET `/api/msg/batch/{id}` | ❌ 同上 |
+| POST | `/api/msg/delivery/list` | ❌ 同上 |
+| GET **和** POST | `/api/msg/delivery/stats` | ❌ 同上。两个动词各由一个类声明（`MessageController` 的 GET、`MsgDeliveryLogController` 的 POST），z-opc 前端用的是 GET —— 闸门按**路径**判，所以这一条不会因为"不长在它自己的 controller 里"而漏出去 |
 
-> 三个模块均已发布到 Maven Central，groupId: `io.github.yuku123`，version: **1.0.0**
+`/api/msg/send` 不存在（旧 README 里那句是假的）。
 
----
+上面那 12 条管理面路径不是手抄的：`MsgAdminSurfaceCensusTest` 在示例宿主（web + im 全量装配）里
+把活的 handler mapping 逐条过一遍闸门判定，与两份钉死的清单对账 —— 少拦一条、或多放一条，测试就红。
 
-## ✨ 设计原则
+## 9. 安全边界（照实说）
 
-### 通道无关
+**默认关的东西**，每一条都是因为开着时"不带身份就能用"：
 
-业务代码只依赖 `MessageGateway` 抽象接口，**不绑死** Aliyun SMS / SMTP / 微信推送。切换后端只改 `application.yml` 一行。
+| 开关 | 默认 | 打开的代价 |
+|---|---|---|
+| `z-msg.web.trusted-header-enabled` | `false` | 打开后 `X-Msg-User-Id` 就是身份——**必须**确认上游网关会覆盖/剥离客户端自带的同名头 |
+| `z-msg.web.publish-endpoint-enabled` | `false` | 服务间事件投递端点，开了要自己保证调用方可信。关着时是 HTTP 200 + 业务 `code:403` |
+| `z-msg.web.admin-endpoints-enabled` | `false` | 模板/批量/投递日志三组管理面。关着时是**真 HTTP 403** + `Result` 正文（这些请求根本没进 controller，给网关和监控看得见的状态码才有用） |
+| `z-msg.realtime.ticket-secret` | `""` | 空则 fail closed，不签弱密钥票：`/ws-token` 回业务 `code:503`（HTTP 仍是 200），WS 握手由拦截器给真 HTTP 503 |
+| `z-msg.ws.public-topics` | `[]` | 只影响"订得到哪些非本人 topic"，全部不表态时按拒绝处理 |
 
-### 多通道架构
+`z-msg.ws.allowed-origins` 是**例外**：默认 `[]` 的含义是"不限 Origin"，不是"全部拒绝"——
+代码只在列表非空时调用 `setAllowedOrigins`。这不是疏漏，`WsProperties` 里写着理由：握手凭据是一次性
+短期票，必须由已认证的 HTTP 会话去 `/inbox/ws-token` 换，跨站页面读不到那个响应；能拿到票的人本来
+就已在登录态里。**如果宿主改成长期 token 走 query，请务必显式配上自己的域名。**
 
-```
-                ┌──────────────────────────────┐
-                │  MessageGateway (统一入口)   │
-                └──────────────────────────────┘
-                          ▲   ▲   ▲   ▲   ▲
-                          │   │   │   │   │
-            ┌─────────────┘   │   │   └────────────┐
-            │           ┌─────┘   └─────┐          │
-            │           │               │          │
-   ┌────────┴─────┐ ┌───┴────┐  ┌──────┴───┐ ┌────┴──────────┐
-   │ EmailChannel │ │SmsChannel│  │PushChannel│ │WebhookChannel │
-   │ (SMTP / SES) │ │(Aliyun)  │  │(APNs/FCM) │ │(HTTP callback)│
-   └──────────────┘ └──────────┘  └───────────┘ └───────────────┘
-```
+**管理面为什么是开关而不是鉴权**：1.0.x 一直到 1.1.0 之前，`/api/msg/template/**`、`/api/msg/batch/**`、
+`/api/msg/delivery/**` 一次 `principalResolver` 都没调用过，`z-msg-web` 里也没有任何
+`HandlerInterceptor` / `OncePerRequestFilter`。库里没有"管理员"这个概念（角色归宿主），
+所以 1.1.0 收口的形状是：默认全关，`AdminEndpointGate` 一个拦截器按路径挡，宿主在自己的
+认证边界内打开一行 yml 就能用。**代价说清楚**：z-opc 的模板管理页 / 批量任务页 / 投递日志页
+升级到 1.1.0 后会直接 403，需要在宿主要么补一行 `z-msg.web.admin-endpoints-enabled=true`（+ 自己前面的登录墙），
+要么等角色判定这一层落地。
 
-### 默认 Provider
+**仍然没做的**（开关不等于鉴权，这条别再当已闭）：
 
-| 通道 | 默认实现 | 生产可替换为 |
-|------|----------|-------------|
-| Email | MockEmailSender / SmtpEmailSender | SES / SendGrid / Aliyun DirectMail |
-| SMS | MockSmsSender | Aliyun SMS / Tencent Cloud SMS |
-| In-app | InAppChannel | 自建消息中心 |
-| Push | PushSender（HTTP） | APNs / FCM / 极光 / 个推 |
-| Webhook | WebhookSender | Slack / 钉钉 / 飞书 |
-| IM | ImSender | 微信 / 钉钉 / 飞书机器人 |
+- 管理面**没有角色判定**：开了开关就是全开，"谁能审批模板"仍然只由宿主前置的网关/登录决定；
+- `MsgDeliveryLogController#list` 在开关打开后仍按**请求体里客户端自报的 `userId`** 过滤——
+  那是 PII，形状与 1.0.x 那个越权读收件箱的洞同一个。开关只是让它默认不存在。
 
----
+**其余已知取舍**：票在 TTL 内可重放（要一次性消费得加 jti 存储）；没有 in-band `op=auth` 续期，
+超时后要重连；IM 已读游标与消息表是两处写，崩溃窗口内可能短暂偏差。
 
-## ⚙️ 实用 Case
+## 10. 配置全表
 
-### Case 1: 单条邮件发送
+`z-msg.*`（core，`MessageProperties`）：
 
-```java
-@Autowired private MessageGateway gateway;
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `enabled` | `true` | 总开关，关掉全部撤回 |
+| `sms.provider` | `mock` | `aliyun` / `mock` |
+| `sms.default-sign` | `【z-opc】` | |
+| `email.provider` | `mock` | `smtp` / `mock` |
+| `email.default-from` | `no-reply@z-opc.com` | |
+| `email.smtp-host` / `smtp-port` / `smtp-username` / `smtp-password` | — | |
+| `template.<code>` | 空 map | 模板串 |
+| `channel.<CH>.provider` | 无 | 选厂商实现，见 §7 |
+| `channel.<CH>.enabled` | `true` | |
+| `channel.<CH>.fallback-channels` | `[]` | 该通道不可用时的降级顺序 |
+| `rate-limit.enabled` | `true` | |
+| `rate-limit.default-permits-per-second` | `50` | |
+| `rate-limit.per-channel.<CH>` | 无 | 按通道覆盖 |
+| `rate-limit.per-user-permits-per-minute` | `20` | |
+| `retry.max-attempts` | `2` | |
+| `retry.backoff-ms` | `200,1000,3000` | |
+| `retry.non-retryable` | 内置列表 | 业务拒绝不重试 |
+| `retry.max-blocking-ms` | `1500` | 同步调用最长被拖住的时间 |
+| `inbox.push-realtime` | `true` | 落库后顺带推在线连接 |
+| `inbox.default-page-size` / `max-page-size` | `20` / `200` | |
+| `inbox.expire-days` | `0` | 0 = 不过期 |
+| `realtime.ticket-secret` | `""` | 空 = fail closed |
+| `realtime.ticket-ttl-seconds` | `60` | |
+| `realtime.ticket-audience` | `z-msg-ws` | |
 
-EmailMessage msg = EmailMessage.builder()
-        .to("user@example.com")
-        .subject("订单确认")
-        .body("您的订单 #12345 已提交成功")
-        .build();
+`z-msg.web.*`：`trusted-header-enabled=false`、`trusted-header-name=X-Msg-User-Id`、
+`publish-endpoint-enabled=false`、`admin-endpoints-enabled=false`（后者挡 §9 那三组管理面，
+判定只在 `AdminEndpointGate.isAdminPath` 一处：按路径段对齐，`/api/msg/templates` 不算管理面）。
 
-MessageSendResult result = gateway.send(msg);
-// result.isSuccess() / result.getMessageId() / result.getChannel()
-```
+`z-msg.ws.*`：`enabled=true`、`path=/api/msg/ws`、`allowed-origins=[]`、`public-topics=[]`、
+`idle-timeout-seconds=120`、`max-text-message-bytes=262144`、`max-sessions-per-user=8`、
+`max-topics-per-connection=64`。
 
-### Case 2: 模板渲染 + 批量发送
+`z-msg.im.*`：`enabled=true`、`default-page-size=50`、`max-page-size=200`、
+`max-members-per-conversation=500`、`max-content-length=4000`、`seq-cas-max-attempts=200`、
+`seq-cas-backoff-ms=1`、`publish-realtime=true`、`publish-read-receipt=true`、
+`user-side-push=true`、`user-side-push-max-members=200`。
 
-```java
-@Autowired private MessageGateway gateway;
-@Autowired private MessageTemplateEngine templateEngine;
+`z-msg.channel.<CH>.*` 的 17 个厂商键（`token` / `secret` / `app-id` / `app-secret` / `access-key-id`
+/ `access-key-secret` / `sign-name` / `template-code` / `region` / `signature-version` / `slack-channel`
+/ `url` / `base-url` / `connect-timeout-ms` / `read-timeout-ms` / `retries` / `mock`，另加 `provider`
+这个选择位）逐个"在哪被读"见 [`z-msg-channels/README.md`](z-msg-channels/README.md)。
 
-// 1. 模板渲染（参数化）
-String rendered = templateEngine.render("welcome-template", Map.of(
-        "userName", "张三",
-        "registerTime", "2026-09-15"
-));
+## 11. 数据库
 
-// 2. 批量下发（自动限流 + 重试）
-List<String> recipients = List.of("a@x.com", "b@y.com", "c@z.com");
-BatchSendResult batch = gateway.sendBatch(Channel.EMAIL, recipients, rendered, "欢迎注册");
+MySQL 与 H2 各一份，同源由 `SchemaParityTest` 真跑执行验证：
 
-System.out.println("成功 " + batch.getSuccessCount() + " / " + recipients.size());
-```
+| 脚本 | 内容 |
+|---|---|
+| `z-msg/sql/schema-mysql.sql` / `schema-h2.sql`（在 `z-msg-core` 的 jar 里） | 7 张表：`z_msg_message`、`z_msg_template`、`z_msg_template_i18n`、`z_msg_template_version`、`z_msg_delivery_log`、`z_msg_batch_task`、`z_msg_user_preference` |
+| `z-msg/sql/im-schema-mysql.sql` / `im-schema-h2.sql`（在 `z-msg-im` 的 jar 里） | 4 张表：会话、成员、消息、已读回执；唯一键 `uk_im_conv_pair`、`uk_im_member_conv_user`、`uk_im_msg_conv_seq`、`uk_im_msg_conv_client`、`uk_im_receipt_conv_user` |
 
-### Case 3: 多通道并行发送（验证码场景）
+上表那些"幂等/有序/不重复"的承诺，落点全在这几个唯一键上。
 
-```java
-MultiChannelMessage multi = MultiChannelMessage.builder()
-        .add(Channel.EMAIL,    EmailMessage.to("user@example.com"))
-        .add(Channel.SMS,      SmsMessage.to("+8613800000000"))
-        .add(Channel.PUSH,     PushMessage.toDevice("device-token-123"))
-        .build();
-
-MessageSendResult result = gateway.sendMulti(multi);
-// 三个通道并行发送，任一成功即视为发送成功
-```
-
-### Case 4: 自定义 Provider 扩展（SPI 钩子）
-
-```java
-// 业务侧实现自定义 SMS Provider（不需要修改 z-msg 源码）
-@Component
-public class AliyunSmsProvider implements SmsSender {
-    @Override
-    public MessageSendResult send(SmsMessage message) {
-        // 调用 Aliyun SDK
-        return aliyunClient.sendSms(message.getTo(), message.getContent());
-    }
-
-    @Override
-    public Channel channel() {
-        return Channel.SMS;
-    }
-}
-
-// Spring Boot 启动后，ChannelRouter 自动发现并注册该 Provider
-```
-
-### Case 5: HTTP API 直接调用（无需写 Java 代码）
+## 12. 跑起来
 
 ```bash
-# 1. 发送邮件
-curl -X POST http://localhost:8080/api/msg/send \
-  -H "Content-Type: application/json" \
-  -d '{
-    "channel": "EMAIL",
-    "to": "user@example.com",
-    "subject": "测试",
-    "body": "Hello z-msg"
-  }'
-
-# 2. 创建模板
-curl -X POST http://localhost:8080/api/msg/template \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "welcome-template",
-    "channel": "EMAIL",
-    "subject": "欢迎 {{userName}}",
-    "body": "Hi {{userName}}, 您的注册时间是 {{registerTime}}"
-  }'
-
-# 3. 查询投递日志
-curl http://localhost:8080/api/msg/delivery-log?messageId=xxx
+cd z-msg
+mvn -B -o clean verify                        # 8 模块、168 例
+mvn -B -o -DskipTests install                 # 装进 ~/.m2，一次即可
+mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 ```
+
+打开 <http://localhost:18099/> 两个标签页，分别点「1001 张三」「1002 李四」——
+聊天与站内信都是真的跨连接到达，页底的帧日志可以逐帧核对。
+（同一 workspace 里若 18099 被别的进程占了，用 `--server.port=` 换。）
+
+## 13. 测试都钉住了什么
+
+| 模块 | 关键几例 |
+|---|---|
+| core | `SchemaParityTest`（MySQL/H2 两份 DDL 真跑执行、同表同列）、`SenderRegistryProviderDefaultTest`（缺 provider 时兜底成 mock 且被如实标记）、`RealtimeTicketServiceTest`、`WebhookSenderTest`、`LegacySpiAdapterTest` |
+| web | `MsgInboxApiTest` 8 例：匿名 401 而登录 200、`oneUserCannotSeeOrMutateAnotherUsersInbox`、过期项既不列表也不计红点、分页真截断且 `total` 是真的、同 `idempotencyKey` 不重复入库、自省接口如实标 mock、`ws-token` 绑当前人。`MsgAdminEndpointGateTest` 4 例：缺省时 9 条管理面请求（含挂在 `MessageController` 上的 `GET /delivery/stats`）一律 HTTP 403、403 正文里点名那个开关、非管理面端点照常答（且缺身份仍是 401 而不是被闸门顺手改成 403）、前缀匹配按路径段对齐。`MsgAdminEndpointEnabledTest` 1 例：同一批请求打开开关全 200 且返回真分页结构——这一例是前四例的对照，否则"路由压根没挂上"也能让 403 假绿 |
+| ws | 握手 fail-closed 2 例 / `enabled=false` 全撤 1 例 / 端到端 10 例 / 授权策略 4 例 / 注册表索引 1 例（8 持票 × 4 加入 × 20000 代对撞，并断言 `GENERATIONS*JOINERS` 次订阅全部成立——防止"对撞没跑满"的假绿） |
+| im | 自动装配 6 例（含"im 的 mapper 与 core 的 mapper 落在同一个 `sqlSessionFactoryMsg`"）、禁用路径 2 例（读 `ConditionEvaluationReport` 定位到 `OnPropertyCondition` 且点名 `im.enabled`）、三态授权 7 例、两条真 socket 的实时 6 例、REST 5 例、服务层 26 例 |
+| example | 7 例：A 发言进 B 的帧、未放行 topic 被拒而大厅同连接可发、站内信三处同时命中、未登录 401、首页真伺服、同一个 cookie jar 里两个标签页仍是两个人，外加 `MsgAdminSurfaceCensusTest`：在这个全量装配的宿主里把活的 handler mapping 逐条过闸门，钉住"拦下 12 条 / 放行 32 条"两份清单，并先断言普查真的数到了 40+ 个映射 |
+
+这些不是"跑过一遍绿了"就完事：每条新增的守卫都做过变异验证（摘掉守卫必须变红，然后按 `md5`
+还原成字节一致再复跑）。管理面闸门这一轮跑了 9 支：摘掉拦截器注册、从清单里少写一个前缀、
+前缀匹配退化成裸 `startsWith`、默认值翻成开、判定恒真（拦下所有端点，连带把收件箱与收件箱用例一起打红）、
+判定恒假、以及两支专打普查的（删前缀 → 拦下的那份不等；新加一个 `/api/msg/p8probe` controller →
+放行的那份不等）。九支全部落到具名用例变红，还原后 `md5` 逐字节一致。
 
 ---
 
-## 🏗️ 项目结构
+## 14. 1.0.0 → 1.1.0 迁移
+
+**破坏性变更集中在读侧身份。** 1.0.0 的 jar 实测（`javap` 于 `z-msg-web:1.0.0`）：
+`list(Long,Integer)`、`unreadCount(Long)`、`detail(Long)`、`markRead(Long)`、`delete(Long)`、
+`deleteAll(Long)` —— 归属人完全来自调用方，`detail`/`read`/`delete` 连归属参数都没有。
+1.1.0 起这些一律从 `MsgPrincipalResolver` 取当前人，客户端自称的 `userId` 不再被读。
+
+| 1.0.0 | 1.1.0 | 迁移动作 |
+|---|---|---|
+| `GET /api/msg/list?userId=&unreadOnly=` | `GET /api/msg/inbox/list?page=&size=` | 删掉 `userId`；分页响应变 `IPage`，行在 `data.records` |
+| `GET /api/msg/unread/{userId}` | `GET /api/msg/inbox/unread-count` | 路径参数消失 |
+| `GET /api/msg/detail/{id}` | `GET /api/msg/inbox/detail?id=` | id 改 query；不是自己的会查不到 |
+| `POST /api/msg/read/{id}` | `POST /api/msg/inbox/read?id=` | 同上 |
+| `POST /api/msg/read-all/{userId}` | `POST /api/msg/inbox/read-all` | |
+| `POST /api/msg/delete/{id}` · `POST /api/msg/delete-all/{userId}` | `DELETE /api/msg/inbox/delete?id=` · `DELETE /api/msg/inbox/delete-all` | 动词从 POST 改成 DELETE；删除由物理删改软删 |
+| `MessageGateway.sendSms/sendEmail` | 保留，另加 `send(Message)` / `fanOut(...)` | 无（IM/Push/In-app 之前只能绕开 gateway 拿 router，现在不用了） |
+| `POST /api/msg/template/**` · `/api/msg/batch/**` · `/api/msg/delivery/**`、`GET /api/msg/delivery/stats` | 路径与请求体**不变**，但默认一律真 HTTP 403 | 宿主加一行 `z-msg.web.admin-endpoints-enabled=true` 就回到旧行为（z-opc 的模板页 / 批量任务页 / 投递日志页要的就是这一条） |
+| — | `GET /api/msg/send` 之类不存在；`/api/msg/publish` 默认关 | 需要服务间投递请显式开开关 |
+
+旧前缀写错的地方也一并纠正：README 1.0.0 里的 `z.msg.*` 从来就不是真实前缀，parent 从 1.0.0 起
+就是 `z-msg`。
+
+z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-starter-frontend/`，实测行号）：
+
+- `src/msg/services/api.js:11` 的 `inbox:` 是 `request.get('/msg/list', {params:{userId, limit}})` ——
+  `/api/msg/list` 在 1.1.0 已删（实测 404；连 1.0.0 也从来没有 `limit` 这个参数，它一直是白传的）。
+  改成 `GET /api/msg/inbox/list?page=&size=`、行读 `data.records`、**不再传 `userId`**；
+  配套的两处文案在 `src/msg/pages/Inbox.jsx:43` 与 `:51`。
+  收件箱这条路不再需要 `currentUserId()` 拼出来的那个 id（但 `pages/MsgApp.jsx:10` 还在用它显示
+  "当前登录人"，别顺手删函数）。
+
+`TemplateList.jsx` / `BatchTasks.jsx` / `DeliveryLogs.jsx` 用的
+`POST /api/msg/{template,batch,delivery}/list` 与 `GET /api/msg/delivery/stats` 在 1.1.0 **仍在**，
+不用改——但它们是 §9 那个"完全不做身份校验"的管理面，改不改端点都要一并处理。
+
+## 15. 设计参考（GitHub 同类项目）
+
+看过一圈，取的是形状不是代码（stars 为写作时 `gh api` 实测）：
+
+| 项目 | 实测 | 从它那儿拿走的 | z-msg 里落在哪 |
+|---|---|---|---|
+| [novuhq/novu](https://github.com/novuhq/novu) | 40068★ TS | "一次 API 扇出多通道 + 用户偏好 + 静默时段"作为通知中台的产品形状 | `gateway.fanOut(...)`、`z_msg_user_preference`、`priority` 跳静默/限流的档位 |
+| [openimsdk/open-im-server](https://github.com/openimsdk/open-im-server) | 16675★ Go | 会话/成员/**seq** 三件套与"增量同步按 seq 拉"的消息模型 | `z-msg-im` 的 `ImSequencer`、`uk_im_msg_conv_seq`、`POST /api/msg/im/message/history` 的 `sinceSeq` |
+| [centrifugal/centrifugo](https://github.com/centrifugal/centrifugo) | 10797★ Go | channel 订阅语义、连接建立即下发 `ready`、服务端代发而非放开客户端直写 | `z-msg-ws` 的 `ready` 帧、`op=publish` + 三态授权 |
+| [mrniko/netty-socketio](https://github.com/mrniko/netty-socketio) | 7017★ Java | Java 侧实时接入的常见形态（也说明为什么这里选标准 `TextWebSocketHandler` 而不是再引一个 IO 框架） | `z-msg-ws` 走 Spring 标准 WS，不引额外传输依赖 |
+| [ZhongFuCheng3y/austin](https://github.com/ZhongFuCheng3y/austin) | 6083★ Java | 国内渠道清单（邮件/短信/服务号/小程序/企微/钉钉）与"模板 + 厂商参数"的拆分 | `Channels` 常量集、`z-msg.channel.<CH>.*` 那 17 个键 |
+
+差异也说清：novu/austin 是**独立部署的平台**（自带队列与运营台），z-msg 是**嵌进宿主的库**——
+它的边界是"不引 MQ、不引厂商 SDK、不加一张自建调度表"；OpenIM 是全栈 IM（含客户端 SDK 与
+离线推送），`z-msg-im` 只做服务端会话与实时帧，客户端归宿主。
+
+## 16. 尚未做 / 待议
+
+按性价比排序，都还没有实现：
+
+- 管理面的**角色判定**（见 §9）：1.1.0 落的是"默认关 + 一行 yml 打开"，
+  "谁能审批模板、谁能翻别人的投递日志"仍然完全由宿主前置的登录墙决定；
+- 票的一次性消费（jti 存储），现在 TTL 内可重放；
+- `op=auth` in-band 续期，长连接超过 60s 后换身份只能重连；
+- 增量同步缺 `min_seq`/空洞信号，客户端无法察觉被丢弃的历史段；
+- provider 出网白名单（SSRF 面：`url`/`base-url` 目前由配置决定，scheme 白名单已有，host 未限）；
+- 摘要合并窗口与时区感知的静默时段；
+- 腾讯云 SMS / SendGrid / 极光 / FCM-APNs 的 sender 实现。
+
+---
+
+## 技术栈与前置
+
+Java 8、Spring Boot 2.7.12、MyBatis-Plus 3.5.7、`z-boot-dependencies:1.0.8` BOM、
+SLF4J + Log4j2、H2（测试与演示）。Maven 3.6+；发布需 `~/.m2/settings.xml` 里有 `<server id="central">`
+（跑 `install-settings.sh`）。
+
+## 项目结构
 
 ```
 z-msg/
-├── pom.xml                          # 自给自足 parent (${revision} + flatten)
-├── z-msg-api/                       # 纯 SPI ✅ 已发布 1.0.0
-├── z-msg-core/                      # 默认实现 + Router + RateLimiter + 7 DO ✅ 已发布 1.0.0
-├── z-msg-web/                       # Spring Boot Controller + AutoConfiguration ✅ 已发布 1.0.0
-├── deploy_maven_center.sh           # 一键发布到 Maven Central
-├── install-settings.sh              # 配置 ~/.m2/settings.xml
-└── README.md
+├── pom.xml                 # parent：${revision}=1.1.0 + flatten，自给自足
+├── _doc/001_WS_PROTOCOL.md # 实时协议逐帧规范
+├── z-msg-api/              # 纯 SPI
+├── z-msg-core/             # 默认 provider + router + 站内信 + 7 表 DDL
+├── z-msg-channels/         # 真实厂商 provider
+├── z-msg-web/              # REST + 自动装配 + 身份接缝
+├── z-msg-ws/               # WebSocket 实时层
+├── z-msg-im/               # 会话 / 消息 / 已读回执
+├── z-msg-example/          # 演示宿主（不发布）
+├── deploy_maven_center.sh  # 一键发布
+└── install-settings.sh
 ```
 
----
+## 相关项目
 
-## 🔧 技术栈
+| 项目 | 关系 |
+|---|---|
+| `z-boot` | BOM 与 starter 聚合（`z-boot-msg-starter` 当前 pin 1.0.0，见开头警告） |
+| `z-ctc` | 宿主认证来源：`MsgPrincipalResolver` 生产实现接它的 JWT |
+| `z-mq` | 同系列消息队列；z-msg 刻意不依赖它。`RealtimeTransport` 本仓库只有一个实现（`WsSessionRegistry`，单机内存），多节点部署要宿主自己接一层桥 |
+| `z-opc` | 下游消费者（站内信、模板管理页、演示宿主的前端） |
 
-- Java 8 (Spring Boot 2.7.12 + MyBatis-Plus 3.5.7)
-- Spring Boot Mail（SmtpEmailSender 用 JavaMailSender）
-- Log4j2 + SLF4J
-- 通过 `z-boot-dependencies` BOM 锁定所有第三方版本
-
----
-
-## 🚀 快速开始
-
-### 前置条件
-
-- JDK 8+
-- Maven 3.6+
-- 已配置 `~/.m2/settings.xml` 含 `<server id="central">`（跑 `install-settings.sh`）
-
-### 编译
-
-```bash
-cd /path/to/z-msg
-mvn clean verify -DskipTests          # 仅编译
-mvn clean verify                      # 编译 + 单元测试
-```
-
-### 接入示例
-
-最小集成只需 2 行 XML：
-
-```xml
-<!-- 1. z-boot-dependencies 锁版本 -->
-<dependencyManagement>
-    <dependencies>
-        <dependency>
-            <groupId>io.github.yuku123</groupId>
-            <artifactId>z-boot-dependencies</artifactId>
-            <version>1.0.8</version>
-            <type>pom</type>
-            <scope>import</scope>
-        </dependency>
-    </dependencies>
-</dependencyManagement>
-
-<!-- 2. 一行 import z-msg -->
-<dependencies>
-    <dependency>
-        <groupId>io.github.yuku123</groupId>
-        <artifactId>z-msg-web</artifactId>
-    </dependency>
-</dependencies>
-```
-
-启动你的 Spring Boot 应用，`/api/msg/*` 端点即自动可用。
-
----
-
-## 🧪 测试覆盖
-
-```
-单元测试:    PASS（z-msg-core 7 DO + ChannelRouter + RateLimiter）
-集成测试:    PASS（Mock 通道端到端）
-```
-
----
-
-## 📚 详细文档
-
-- [Channel 设计](docs/CHANNEL_DESIGN.md)
-- [RateLimiter 配置](docs/RATE_LIMITER.md)
-- [模板引擎](docs/TEMPLATE_ENGINE.md)
-- [迁移指南（直连 Aliyun SDK → z-msg）](docs/MIGRATION.md)
-
----
-
-## 🤝 贡献
-
-```bash
-cd z-msg-core
-mvn clean verify
-```
-
----
-
-## 📄 许可证
+## 许可
 
 [MIT License](LICENSE)
 
 ---
 
-## 🔗 相关项目
-
-| 项目 | 关系 |
-|------|------|
-| [z-boot](https://github.com/z-opc-foundation/z-boot) | 提供 BOM + starter 聚合 (`z-boot-msg-starter`) |
-| [z-mq](https://github.com/z-opc-foundation/z-mq) | 同系列 — 分布式消息队列（异步通道可结合） |
-| [z-cache](https://github.com/z-opc-foundation/z-cache) | 同系列 — 分布式缓存（限流计数器可用） |
-| [z-opcs](https://github.com/z-opc-foundation/z-opcs) | 下游消费者 — 任务撮合消息推送（B 端通知） |
-
----
-
-## 📮 联系
-
-- GitHub Issues: 提交 bug / feature request
-- Email: yuku123@users.noreply.github.com
-
----
-
-_S-MSG: 让任何 Java 业务都能 5 分钟接入多通道消息下发._
 _Maintained by z-opc-foundation organization._
