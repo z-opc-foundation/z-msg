@@ -22,8 +22,11 @@
 #   - 默认 dry-run 不做任何事情，必须显式给子命令
 #
 # ⚠️ 关键约束：
-#   - 必须在用户自己 macOS 终端（不走 sandbox）跑
-#   - sandbox 限制 64KB 出站 POST，157MB bundle 必然失败
+#   - 必须联网：`mvn -o deploy -Pcentral` 会把 central-publishing 的 publish 目标整场静默跳过
+#     （每个模块一行 "Goal publish requires online mode ... skipping"）而照样 BUILD SUCCESS，
+#     2026-09-26 实测踩过一次——判"发出去了"只认 repo1 的 HEAD 与 bundle 里的文件数
+#   - "沙箱不能上传"这条旧约束已被实测证伪：26,325,677 字节的 bundle 就是从本机 agent 环境里
+#     发出去的（1.2.0，deploymentId 2abdcb41-9e67-4ab7-94e5-c7cd5df1eb0a）
 #
 # 通用指引：见同目录的 发布指引.md（任何 AI / 工程师都能从零开始）
 #
@@ -241,12 +244,15 @@ cmd_readme() {
 【AI 助手避坑（实战经验）】
 
   ✗ 不要把 CENTRAL_TOKEN / GPG passphrase 贴到对话
-  ✗ 不要在 sandbox 跑 mvn deploy（64KB 限制 → 必然失败）
+  ✗ 不要用 mvn -o（离线）跑：publish 目标要求联网，离线时八个模块各跳一行而照样 BUILD SUCCESS
   ✗ 不要跳过 javadoc 或 GPG 测试（Central 强制要求）
-  ✗ 不要重发同名版本号（FAILED 残骸会占坐标）
-  ✓ 用 -pl '!z-msg' 跳过聚合 pom
+  ✗ 不要重发同名版本号（发出去就永久占位：1.1.0 误发的 z-msg-example 现在还在中央仓库上）
+  ✗ 不要用 -pl 摘掉 reactor 的最后一个模块：bundle 的打包与上传发生在最后一次 publish 执行里，
+    摘掉它就是"zip 照样打好、七个该发的一个都发不出去"（在模块里写 skipPublishing=true 同理）
+  ✓ 要排除模块只认根 pom 的 <excludeArtifacts>（1.2.0 实测：bundle 150 文件、example 命中 0）
+  ✓ 版本号只有根 pom 的 <revision> 一处（子 pom 一律 ${revision}，flatten 出去才变成具体版本）
+  ✓ 发布那遍不要加 -DskipTests：让上传出去的字节就是跑绿的那批（1.2.0 是同场 177 例全绿）
   ✓ waitMaxTime=1800（30 分钟）防 mvn 提前放弃
-  ✓ 每次都升版本号（z-msg-api/core/web 等具体子模块 pom 引用具体版本号）
 
 【详细指引】
 

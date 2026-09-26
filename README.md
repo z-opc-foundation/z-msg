@@ -4,36 +4,37 @@
 > 加一层 WebSocket 实时接入，再往上就是聊天室和 IM。
 > Java 8 + Spring Boot 2.7.12，切供应商只改一行 yml，业务代码零修改。
 
-[![Maven Central](https://img.shields.io/badge/Maven%20Central-api%2Fcore%2Fweb%201.0.0-blue?logo=apache-maven)](https://central.sonatype.com/search?q=g:io.github.yuku123+a:z-msg)
+[![Maven Central](https://img.shields.io/badge/Maven%20Central-api%2Fcore%2Fweb%2Fws%2Fim%2Fchannels%201.2.0-blue?logo=apache-maven)](https://central.sonatype.com/search?q=g:io.github.yuku123+a:z-msg)
 [![Java](https://img.shields.io/badge/Java-8%2B-orange)](https://openjdk.org)
 [![Spring Boot](https://img.shields.io/badge/Spring%20Boot-2.7.12-6DB33F)](https://spring.io)
 [![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ## 发布状态（照实说）
 
-`repo1.maven.org` 实测（对 `.pom` 发 HEAD，八个坐标逐个量）：
+`repo1.maven.org` 实测（对 `.pom` 与 `.jar` 发 HEAD，八个坐标逐个量，2026-09-26 20:09；
+parent 是 pom-only，它的 `.jar` 本来就该 404）：
 
-| 构件 | 1.0.0 | 1.1.0（本仓库 `${revision}`） |
-|---|---|---|
-| parent `z-msg` | 200 | 200 |
-| `z-msg-api` / `z-msg-core` / `z-msg-web` | 200 | **200 已发布** |
-| `z-msg-channels` / `z-msg-ws` / `z-msg-im` | 404（1.1.0 才有的模块） | **200 已发布** |
-| `z-msg-example` | 404 | 200 —— 这一件是**误发**的，它本该在 `<excludeArtifacts>` 里，见 §14 |
+| 构件 | 1.0.0 | 1.1.0 | 1.2.0（本仓库 `${revision}`） |
+|---|---|---|---|
+| parent `z-msg` | 200 | 200 | **200 已发布** |
+| `z-msg-api` / `z-msg-core` / `z-msg-web` | 200 | 200 | **200 已发布** |
+| `z-msg-channels` / `z-msg-ws` / `z-msg-im` | 404（1.1.0 才有的模块） | 200 | **200 已发布** |
+| `z-msg-example` | 404 | 200 —— 这一件是**误发**的，见 §14 | **404：这一版起真的不发了**（实测） |
 
-所以 1.1.0 现在可以直接依赖，不用等：
+所以引 1.2.0 就能拿到全部东西，包括 §9 的票一次性消费与 §6 的 `/history` 同步判定量：
 
 ```xml
 <dependency>
     <groupId>io.github.yuku123</groupId>
     <artifactId>z-msg-im</artifactId>
-    <version>1.1.0</version>
+    <version>1.2.0</version>
 </dependency>
 ```
 
-但**本 README 里凡是标了"主干代码，尚未发布"的东西都不在这批字节里** —— 目前两处：
-票的一次性消费（§9）与 `/history` 的同步判定量（§6、§14）。要用它们只有本地 install 这一条路
-（`cd z-msg && mvn -B -DskipTests install`，然后在宿主里按上面的坐标引 `1.1.0`，你引到的就是工作树），
-要对外生效则必须抬版本号——`1.1.0` 已经被占住了，版本号不可复用。
+1.2.0 相对 1.1.0 的全部内容就是这两处，而且都在发布字节里验到过（拿 1.1.0 的发布 jar 做阴性对照，
+`javap` 于 `~/.m2` 与 repo1 各自下载的构件）：`MsgHandshakeInterceptor` 从调 `RealtimeTicketService#verify`
+变成调 `#consume`；`ImMessageController#history` 的返回从 `Result<List<ImMessageDO>>` 变成
+`Result<ImHistoryPage>`。**本 README 里已不再有"主干代码，尚未发布"这一档。**
 
 > ⚠️ **不要用 `z-boot-msg-starter`。** 它 1.0.11~1.0.14 在 Central 上都在，但 pom 里写死只引
 > `z-msg-web:1.0.0`（实测），既没有 `ws`/`im`/`channels`，也还是那个收件箱靠调用方自称 userId 的旧读侧
@@ -56,10 +57,11 @@
 
 ## 模块结构
 
-8 个 Maven 模块（`${revision}` + flatten，parent 自给自足）；测试数取自最近一次
-`mvn -B -o clean verify` 全绿结果，**总计 177 例、0 失败 0 跳过**（工作树口径：比已发布的 1.1.0 多出
-"票的一次性消费"那一轮的 6 例（5 支 core + 1 支真握手 ws E2E），以及"增量同步判定量"这一轮的
-3 例（全在 im 服务层））。
+8 个 Maven 模块（`${revision}` + flatten，parent 自给自足）；测试数取自 `mvn -B -o clean verify`
+与发布那一场 `mvn -B clean deploy -Pcentral`，两边都是**总计 177 例、0 失败 0 跳过**
+（core 26 / channels 57 / web 13 / ws 19 / im 55 / example 7）。发布那一遍**没有** `-DskipTests`：
+上传出去的字节就是这 177 例跑绿的那批 jar（三方 sha256 对账见 §14）。1.1.0 发布件是 168 例，
+多出来的 6 例是票的一次性消费那一轮（5 支 core + 1 支真握手 ws E2E），3 例是增量同步判定量那一轮（全在 im 服务层）。
 
 | 模块 | 职责 | 测试 |
 |---|---|---|
@@ -69,7 +71,7 @@
 | `z-msg-web` | REST Controller + `MsgAutoConfiguration`（`spring.factories`）+ 身份接缝 + 管理面闸门 `AdminEndpointGate` | 13 |
 | `z-msg-ws` | WebSocket 实时接入层：短期票握手、帧协议、topic 订阅、三态授权、在线注册表 | 18 |
 | `z-msg-im` | 会话/成员/消息/已读回执域，seq 分配与增量同步，自带 4 张表与 REST | 55 |
-| `z-msg-example` | 能跑的大厅聊天室 + 站内信宿主（**从下一版起不进发布清单**，见 §14），顺带承载端点普查 | 7 |
+| `z-msg-example` | 能跑的大厅聊天室 + 站内信宿主（**1.2.0 起真的不进发布清单**：repo1 实测这一件 404、其余七件 200，见 §14），顺带承载端点普查 | 7 |
 
 深入文档各就各位，本 README 只讲清边界与入口：
 
@@ -85,22 +87,22 @@
 <dependency>
     <groupId>io.github.yuku123</groupId>
     <artifactId>z-msg-web</artifactId>   <!-- 站内信 + HTTP 面 -->
-    <version>1.1.0</version>
+    <version>1.2.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.yuku123</groupId>
     <artifactId>z-msg-ws</artifactId>    <!-- WebSocket 实时 -->
-    <version>1.1.0</version>
+    <version>1.2.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.yuku123</groupId>
     <artifactId>z-msg-im</artifactId>    <!-- 聊天室 / IM 域 -->
-    <version>1.1.0</version>
+    <version>1.2.0</version>
 </dependency>
 <dependency>
     <groupId>io.github.yuku123</groupId>
     <artifactId>z-msg-channels</artifactId> <!-- 真实厂商 -->
-    <version>1.1.0</version>
+    <version>1.2.0</version>
 </dependency>
 ```
 
@@ -188,8 +190,8 @@ GET /api/msg/inbox/ws-token        ← 已认证的 HTTP（session / JWT 由宿�
 WS  /api/msg/ws?token=<token>      ← 握手只认这张票，签名/受众/过期任一不过 → 401
 ```
 
-一张票只换一条连接，所以**重连要重新换票**（缓存 token 复用会撞 401；这条在主干代码里，
-已发布的 1.1.0 还是 TTL 内可重放，见 §9）。
+一张票只换一条连接，所以**重连要重新换票**（缓存 token 复用会撞 401；这条从 1.2.0 起是发布件里的
+行为，1.1.0 及更早还是 TTL 内可重放，见 §9）。
 
 连上后服务端先推一帧 `ready`（含自动订阅好的 `user:<自己>` 与租户 topic），之后就是
 `subscribe` / `unsubscribe` / `publish` / `ping` 四张客户端帧和 `pong` / `ready` / `message` /
@@ -262,7 +264,7 @@ ImMessageDO send(Long conversationId, Long senderUserId, String msgType, String 
 ```
 
 `POST /api/msg/im/message/history` 回的是一个**对象**，不是消息数组
-（1.1.0 的发布件回的是裸数组 —— 这个形状在主干代码里，**尚未发布**，迁移动作见 §14）：
+（1.1.0 及更早的发布件回的是裸数组 —— 对象形状从 **1.2.0** 起对外，迁移动作见 §14）：
 
 ```json
 { "rows": [ { "seq": 7, "content": "…" } ],
@@ -400,7 +402,7 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 
 `z-msg.ws.allowed-origins` 是**例外**：默认 `[]` 的含义是"不限 Origin"，不是"全部拒绝"——
 代码只在列表非空时调用 `setAllowedOrigins`。这不是疏漏，`WsProperties` 里写着理由：握手凭据是一次性
-短期票（这条保证在主干代码里，**已发布的 1.1.0 还没有**，见下面"票的一次性消费"），必须由已认证的 HTTP 会话去 `/inbox/ws-token` 换，跨站页面读不到那个响应；能拿到票的人本来
+短期票（这条保证从 1.2.0 起在发布件里，1.1.0 还没有，见下面"票的一次性消费"），必须由已认证的 HTTP 会话去 `/inbox/ws-token` 换，跨站页面读不到那个响应；能拿到票的人本来
 就在登录态里。**如果宿主改成长期 token 走 query，请务必显式配上自己的域名。**
 
 **管理面为什么是开关而不是鉴权**：1.0.x 一直到 1.1.0 之前，`/api/msg/template/**`、`/api/msg/batch/**`、
@@ -417,7 +419,7 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 - `MsgDeliveryLogController#list` 在开关打开后仍按**请求体里客户端自报的 `userId`** 过滤——
   那是 PII，形状与 1.0.x 那个越权读收件箱的洞同一个。开关只是让它默认不存在。
 
-**票的一次性消费**（主干代码，尚未发布；已发布的 1.1.0 里票在 TTL 内仍可重放）：握手走 `RealtimeTicketService#consume`，一张票只换得到第一条连接，
+**票的一次性消费**（1.2.0 起是发布件行为；1.1.0 及更早里票在 TTL 内仍可重放）：握手走 `RealtimeTicketService#consume`，一张票只换得到第一条连接，
 第二次握手 401 —— 因为票进过 URL 就会被 access log、代理日志、浏览器历史原样留下来。
 `verify` 保持纯验签、可重复调用，它**不是**安全闸门：验得通只说明"这张票是真的"，不说明"还没人用过"。
 边界照实说：记账在**进程内存**里，所以 ① 重启后旧票在 TTL 内还能再用一次 ② 多实例各记各的，
@@ -491,7 +493,7 @@ MySQL 与 H2 各一份，同源由 `SchemaParityTest` 真跑执行验证：
 
 ```bash
 cd z-msg
-mvn -B -o clean verify                        # 8 模块、177 例（工作树；1.1.0 发布件是 168 例）
+mvn -B -o clean verify                        # 8 模块、177 例（1.2.0 发布件同口径；1.1.0 是 168 例）
 mvn -B -o -DskipTests install                 # 装进 ~/.m2，一次即可
 mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 ```
@@ -531,7 +533,7 @@ REST 的 `水位仍是清空时的位置 <2> but was: <0>`）；摘掉探针行�
 
 ---
 
-## 14. 1.0.0 → 1.1.0 迁移
+## 14. 迁移：1.0.0 → 1.1.0 → 1.2.0
 
 **破坏性变更集中在读侧身份。** 1.0.0 的 jar 实测（`javap` 于 `z-msg-web:1.0.0`）：
 `list(Long,Integer)`、`unreadCount(Long)`、`detail(Long)`、`markRead(Long)`、`delete(Long)`、
@@ -561,8 +563,23 @@ REST 的 `水位仍是清空时的位置 <2> but was: <0>`）；摘掉探针行�
 central-publishing-maven-plugin 0.7.0 无效，它只认自己的 `excludeArtifacts` /
 `skipPublishing`；而后者不能用——本模块是 reactor 最后一个，bundle 的创建与上传都发生在
 最后一次 publish 执行里，在模块里写 `skipPublishing=true` 的实测结果是"zip 照样打好、
-七个该发的一个都发不出去"。所以排除写在根 pom 的 `<excludeArtifacts>`，
-从下一版起 `z-msg-example` 才真的不进清单。
+七个该发的一个都发不出去"。所以排除写在根 pom 的 `<excludeArtifacts>`，`z-msg-example` 从 1.2.0 起真的不进清单。
+
+**1.2.0 已发布**（2026-09-26，deploymentId `2abdcb41-9e67-4ab7-94e5-c7cd5df1eb0a`）。这一次的收口证据是量出来的，
+不是照着配置推的：
+
+| 量什么 | 读数 |
+|---|---|
+| repo1 八个坐标（`.pom`、`.jar`、`.pom.asc` 各发 HEAD） | 六个模块 `.pom`/`.jar`/`.pom.asc` 全 **200**；parent `.pom`/`.pom.asc` 200（`.jar` 404 是 pom-only，不是缺件）；`z-msg-example` 三样全 **404** |
+| 上传前的 bundle（死端点预演与真发布各产一份，路径 `target/central-publishing/central-bundle.zip`） | **150 个文件、7 个坐标、`example` 命中 0**、内部版本全 1.2.0 |
+| 六个 jar 的 sha256 三方对账 | `repo1` == bundle 内字节 == 本机 `target/` 产物，逐字节相同 |
+| 签名 | `gpg --verify` 对 repo1 的 `.pom.asc` / `.jar.asc` 都是 Good signature，密钥 `42DC738C0C7FCA6D3D6476ACF3111602D4A8C3BB`（ed25519） |
+| 发布那一场构建的测试 | `mvn -B clean deploy -Pcentral` **不带 `-DskipTests`**：177 例、0 失败 0 跳过（所以对外字节与被绿的字节是同一批） |
+
+一条必须写下来的坑：**`mvn -o deploy -Pcentral` 会静默不发**。central-publishing 的 `publish` 目标
+要求联网，离线时八个模块各打一行 `Goal publish requires online mode for execution but Maven is
+currently offline, skipping`，然后照样 `BUILD SUCCESS`——预演第一次就是这么"全绿"而 `target/central-staging`
+是空目录。判"发出去了"只认 repo1 的 HEAD 读数与 bundle 里的文件数，别认 Maven 那三个字。
 
 z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-starter-frontend/`，实测行号）：
 
@@ -577,11 +594,13 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
 `POST /api/msg/{template,batch,delivery}/list` 与 `GET /api/msg/delivery/stats` 在 1.1.0 **仍在**，
 不用改——但它们是 §9 那个"完全不做身份校验"的管理面，改不改端点都要一并处理。
 
-### 1.1.0 之后的读侧形状变更（主干代码，尚未发布）
+### 1.1.0 → 1.2.0 的读侧形状变更
 
-下面这一条**不在 1.1.0 的发布件里**，写在主干上；要对外生效必须抬版本号（1.1.0 永久占位）：
+下面这一条不在 1.1.0 的发布件里，**从 1.2.0 起对外**（发布件侧的证据：repo1 上 `z-msg-im-1.2.0.jar`
+里的 `ImMessageController#history` 返回 `Result<ImHistoryPage>`，而 `z-msg-im-1.1.0.jar` 里是
+`Result<List<ImMessageDO>>`，两边都 `javap` 过）：
 
-| 1.1.0 已发布 | 主干 | 迁移动作 |
+| 1.1.0 已发布 | 1.2.0 | 迁移动作 |
 |---|---|---|
 | `POST /api/msg/im/message/history` → `data` 是**消息数组** | `data` 是对象：`{ rows, nextSinceSeq, hasMore, headSeq, minVisibleSeq }` | 行从 `data` 改读 `data.rows`；翻页别再自己拼 `sinceSeq = rows[rows.length-1].seq`，直接用 `nextSinceSeq`；原先"回了 `size` 条就当还有下一批"的判断可以整段删掉，换 `hasMore` |
 
@@ -593,7 +612,7 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
 示例宿主的页面只调 `/inbox`、`/inbox/ws-token` 与 WS，没调过 `/history`；z-opc 前端
 （`z-opc/bootstraps/z-opc-main-starter-frontend/src/msg/`，实测 6 个文件含 dist）里
 `msg/im` **0 命中**。也就是说目前没有任何已知客户端会因为这一条断掉——但它是破坏性的，
-所以只跟着版本号出去。
+所以只跟着版本号出去，如今是跟着 1.2.0 出去的。
 
 ## 15. 设计参考（GitHub 同类项目）
 
@@ -619,10 +638,9 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
   "谁能审批模板、谁能翻别人的投递日志"仍然完全由宿主前置的登录墙决定；
 - 把 jti 记账换成共享存储，做到跨实例严格一次（现在是每实例各记，见 §9）；
 - `op=auth` in-band 续期，长连接超过 60s 后换身份只能重连；
-- 增量同步的判定量（`hasMore`/`nextSinceSeq`/`headSeq`/`minVisibleSeq`）已在主干落了 REST 形状（§6、§14），
+- 增量同步的判定量（`hasMore`/`nextSinceSeq`/`headSeq`/`minVisibleSeq`）的 REST 形状已随 1.2.0 发出去（§6、§14），
   但它只让客户端**看得见**洞：占号 CAS 成功而随后的 INSERT 失败时，水位不会让回去，
   那个号就永久空着。写侧的 seq 回收仍然待议（要做就得连"让回去的号可能已经被更晚的写占走"一起想清楚）；
-  而这一条形状要对外生效必须抬版本号发布；
 - provider 出网白名单（SSRF 面：`url`/`base-url` 目前由配置决定，scheme 白名单已有，host 未限）；
 - 摘要合并窗口与时区感知的静默时段；
 - 腾讯云 SMS / SendGrid / 极光 / FCM-APNs 的 sender 实现。
@@ -639,7 +657,7 @@ SLF4J + Log4j2、H2（测试与演示）。Maven 3.6+；发布需 `~/.m2/setting
 
 ```
 z-msg/
-├── pom.xml                 # parent：${revision}=1.1.0 + flatten，自给自足
+├── pom.xml                 # parent：${revision}=1.2.0 + flatten，自给自足
 ├── _doc/001_WS_PROTOCOL.md # 实时协议逐帧规范
 ├── z-msg-api/              # 纯 SPI
 ├── z-msg-core/             # 默认 provider + router + 站内信 + 7 表 DDL

@@ -1,4 +1,4 @@
-# z-msg WebSocket 实时协议（1.1.0）
+# z-msg WebSocket 实时协议（1.2.0）
 
 一条连接同时承载**站内信红点**、**聊天室/IM 帧**和**业务自定义事件**。
 宿主侧接入只需要两件事：把 `z-msg-ws` 放进 classpath、配一把 `z-msg.realtime.ticket-secret`。
@@ -28,7 +28,8 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
 - 同一个 key 出现两次（`?token=a&token=b`）**整体判非法**，不是挑一个用。
 - ticket 是 HMAC-SHA256 自签名的短时凭据，格式 `base64url(载荷).base64url(签名)`，
   载荷为 `z-msg-ws|<userId>|<到期毫秒>|<nonce>`。**一张票只换一条连接**：握手按 `nonce` 记账，
-  第二次拿同一张票来 → 401（这条在主干代码里，**已发布的 1.1.0 还没有**，那一版 TTL 内可重放）。
+  第二次拿同一张票来 → 401（这条从 **1.2.0** 起在发布件里；1.1.0 那一版 TTL 内可重放，
+  实测差别是 `MsgHandshakeInterceptor` 在 1.1.0 调 `RealtimeTicketService#verify`、在 1.2.0 调 `#consume`）。
   所以重连必须重新调 `/inbox/ws-token`，不能缓存 token 复用。过期按毫秒比较，不做秒级截断。
   记账在进程内存里：重启后旧票在 TTL 内还能再用一次，多实例则每台各记一次（详见 README §9）。
 - 浏览器不能给 `WebSocket` 加请求头，所以身份必须进 URL；正因为它会进 access log，
