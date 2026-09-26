@@ -90,7 +90,9 @@ CENTRAL_TOKEN=
 # GPG 私钥 passphrase（gpg-init 自动写入下方 GPG 字段）
 CENTRAL_GPG_PASSPHRASE=
 GPG_KEY_ID=
-GPG_USER_NAME=yuku123 <1340947819@qq.com>
+# GPG_USER_NAME 必须带引号：值里的 < 会被 source 当成重定向，裸写时 load_env 直接
+# 报 "syntax error near unexpected token `newline'"，publish 在第一步就死（实测）。
+GPG_USER_NAME='yuku123 <1340947819@qq.com>'
 EOF
         die ".env 模板已创建。请填入 CENTRAL_USERNAME 和 CENTRAL_TOKEN 后重跑 gpg-init"
     fi
@@ -118,7 +120,7 @@ EOF
     # 把 key id / user name 写回 .env（不动中央凭证）
     sed -i.bak \
         -e "s|^GPG_KEY_ID=.*|GPG_KEY_ID=$KEY_ID|" \
-        -e "s|^GPG_USER_NAME=.*|GPG_USER_NAME=$GPG_USER_NAME|" \
+        -e "s|^GPG_USER_NAME=.*|GPG_USER_NAME='$GPG_USER_NAME'|" \
         .env && rm -f .env.bak
 
     log "GPG 密钥生成成功："
@@ -148,24 +150,27 @@ cmd_publish() {
     # 清掉 staging 避免上次残留
     rm -rf target/central-staging target/central-publishing target/central-deferred 2>/dev/null
 
+    # 日志不放 /tmp：这台机器上会有别的会话清 /tmp，出问题时唯一证据就没了。
+    local deploy_log="$HOME/.cache/z-msg-deploy.log"
     mvn -B deploy \
         -Pcentral \
         -DskipTests \
         -Dgpg.passphrase="$CENTRAL_GPG_PASSPHRASE" \
-        2>&1 | tee /tmp/z-msg-deploy.log | tail -100
+        2>&1 | tee "$deploy_log" | tail -100
 
-    if grep -q "BUILD SUCCESS" /tmp/z-msg-deploy.log; then
+    if grep -q "BUILD SUCCESS" "$deploy_log"; then
         log ""
         log "✅ BUILD SUCCESS"
-        if grep -q "Uploaded bundle successfully" /tmp/z-msg-deploy.log; then
+        if grep -q "Uploaded bundle successfully" "$deploy_log"; then
             log "✅ Bundle uploaded"
             log "Central Portal 控制台：https://central.sonatype.com/publishing/deployments"
-            log "验证（30 秒后）：https://search.maven.org/search?q=g:io.github.yuku123"
+            log "验证以 repo1 的 HEAD 状态码为准（Portal 状态接口不可信）：30 分钟后"
+            log "  curl -sI https://repo1.maven.org/maven2/io/github/yuku123/z-msg-core/$(grep -m1 '<revision>' pom.xml | sed 's/.*<revision>\(.*\)<\/revision>.*/\1/')/z-msg-core-$(grep -m1 '<revision>' pom.xml | sed 's/.*<revision>\(.*\)<\/revision>.*/\1/').pom | head -1"
         else
-            warn "BUILD SUCCESS 但 upload 未确认。请看 /tmp/z-msg-deploy.log 最后 30 行"
+            warn "BUILD SUCCESS 但 upload 未确认。请看 $deploy_log 最后 30 行"
         fi
     else
-        die "BUILD FAILURE，请看 /tmp/z-msg-deploy.log"
+        die "BUILD FAILURE，请看 $deploy_log"
     fi
 }
 
