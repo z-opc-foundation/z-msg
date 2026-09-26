@@ -11,17 +11,29 @@
 
 ## 发布状态（照实说）
 
-`repo1.maven.org` 实测（HEAD 请求 `.pom`）：
+`repo1.maven.org` 实测（对 `.pom` 发 HEAD，八个坐标逐个量）：
 
 | 构件 | 1.0.0 | 1.1.0（本仓库 `${revision}`） |
 |---|---|---|
-| `z-msg-api` / `z-msg-core` / `z-msg-web` | 200 已发布 | **404 未发布** |
-| `z-msg-channels` / `z-msg-ws` / `z-msg-im` | 404（1.1.0 新增模块） | **404 未发布** |
+| parent `z-msg` | 200 | 200 |
+| `z-msg-api` / `z-msg-core` / `z-msg-web` | 200 | **200 已发布** |
+| `z-msg-channels` / `z-msg-ws` / `z-msg-im` | 404（1.1.0 才有的模块） | **200 已发布** |
+| `z-msg-example` | 404 | 200 —— 这一件是**误发**的，它本该在 `<excludeArtifacts>` 里，见 §14 |
 
-所以现在只有两条路：
+所以 1.1.0 现在可以直接依赖，不用等：
 
-1. **等 1.1.0 发布**（`deploy_maven_center.sh` 已备好，缺一次人工放行）；
-2. **本地 install 后用**：`cd z-msg && mvn -B -DskipTests install`，然后在宿主里按下面的坐标引 `1.1.0`。
+```xml
+<dependency>
+    <groupId>io.github.yuku123</groupId>
+    <artifactId>z-msg-im</artifactId>
+    <version>1.1.0</version>
+</dependency>
+```
+
+但**本 README 里凡是标了"主干代码，尚未发布"的东西都不在这批字节里** —— 目前两处：
+票的一次性消费（§9）与 `/history` 的同步判定量（§6、§14）。要用它们只有本地 install 这一条路
+（`cd z-msg && mvn -B -DskipTests install`，然后在宿主里按上面的坐标引 `1.1.0`，你引到的就是工作树），
+要对外生效则必须抬版本号——`1.1.0` 已经被占住了，版本号不可复用。
 
 > ⚠️ **不要用 `z-boot-msg-starter`。** 它 1.0.11~1.0.14 在 Central 上都在，但 pom 里写死只引
 > `z-msg-web:1.0.0`（实测），既没有 `ws`/`im`/`channels`，也还是那个收件箱靠调用方自称 userId 的旧读侧
@@ -45,7 +57,9 @@
 ## 模块结构
 
 8 个 Maven 模块（`${revision}` + flatten，parent 自给自足）；测试数取自最近一次
-`mvn -B -o clean verify` 全绿结果，**总计 168 例、0 失败 0 跳过**（本轮五支管理面用例 + 一支普查）。
+`mvn -B -o clean verify` 全绿结果，**总计 177 例、0 失败 0 跳过**（工作树口径：比已发布的 1.1.0 多出
+"票的一次性消费"那一轮的 6 例（5 支 core + 1 支真握手 ws E2E），以及"增量同步判定量"这一轮的
+3 例（全在 im 服务层））。
 
 | 模块 | 职责 | 测试 |
 |---|---|---|
@@ -54,7 +68,7 @@
 | `z-msg-channels` | 真实外部渠道 provider：钉钉/企微/飞书/Slack 群机器人、公众号模板消息、阿里云短信、录制 mock | 57 |
 | `z-msg-web` | REST Controller + `MsgAutoConfiguration`（`spring.factories`）+ 身份接缝 + 管理面闸门 `AdminEndpointGate` | 13 |
 | `z-msg-ws` | WebSocket 实时接入层：短期票握手、帧协议、topic 订阅、三态授权、在线注册表 | 18 |
-| `z-msg-im` | 会话/成员/消息/已读回执域，seq 分配与增量同步，自带 4 张表与 REST | 52 |
+| `z-msg-im` | 会话/成员/消息/已读回执域，seq 分配与增量同步，自带 4 张表与 REST | 55 |
 | `z-msg-example` | 能跑的大厅聊天室 + 站内信宿主（**从下一版起不进发布清单**，见 §14），顺带承载端点普查 | 7 |
 
 深入文档各就各位，本 README 只讲清边界与入口：
@@ -174,6 +188,9 @@ GET /api/msg/inbox/ws-token        ← 已认证的 HTTP（session / JWT 由宿�
 WS  /api/msg/ws?token=<token>      ← 握手只认这张票，签名/受众/过期任一不过 → 401
 ```
 
+一张票只换一条连接，所以**重连要重新换票**（缓存 token 复用会撞 401；这条在主干代码里，
+已发布的 1.1.0 还是 TTL 内可重放，见 §9）。
+
 连上后服务端先推一帧 `ready`（含自动订阅好的 `user:<自己>` 与租户 topic），之后就是
 `subscribe` / `unsubscribe` / `publish` / `ping` 四张客户端帧和 `pong` / `ready` / `message` /
 `ack` / `error` 五张服务端帧。逐字段、错误码、资源上限、断线与并发语义都在
@@ -231,7 +248,7 @@ z-msg:
 | 能力 | 靠什么做到 |
 |---|---|
 | 单聊幂等、群聊、成员与角色 | `single(me, peer, tenant)` 靠 `uk_im_conv_pair` 保证两人只会有一个会话；成员/角色/禁言走成员表 |
-| 消息有序、可增量同步 | 会话内 `seq` 由服务端 CAS 分配（`uk_im_msg_conv_seq`），客户端只按 `sinceSeq` 拉增量 |
+| 消息有序、可增量同步 | 会话内 `seq` 由服务端 CAS 分配（`uk_im_msg_conv_seq`），客户端只按 `sinceSeq` 拉增量；`/history` 连判定量一起给（`hasMore`/`nextSinceSeq`/`headSeq`/`minVisibleSeq`，见下） |
 | 重发不产生两条 | `clientMsgId` 唯一键 `uk_im_msg_conv_client`，命中时返回既有那行（`seq` 不变） |
 | 已读 / 未读 / 回执 | `last_read_seq` + `uk_im_receipt_conv_user`，未读汇总按会话返回 |
 | 服务端署名 | 发言落库时 `sender_user_id` 与 `seq` 都由服务端写——这是它和"大厅自报 from"的区别 |
@@ -243,6 +260,40 @@ z-msg:
 ImMessageDO send(Long conversationId, Long senderUserId, String msgType, String content,
                  String clientMsgId, List<Long> atUserIds, Long replyToSeq);
 ```
+
+`POST /api/msg/im/message/history` 回的是一个**对象**，不是消息数组
+（1.1.0 的发布件回的是裸数组 —— 这个形状在主干代码里，**尚未发布**，迁移动作见 §14）：
+
+```json
+{ "rows": [ { "seq": 7, "content": "…" } ],
+  "nextSinceSeq": 7, "hasMore": true, "headSeq": 9, "minVisibleSeq": 1 }
+```
+
+增量同步因此只剩一段没有分支的循环：
+
+```js
+let cursor = 0;
+for (;;) {
+  const { data: p } = await post('/api/msg/im/message/history',
+    { conversationId, sinceSeq: cursor, size: 200 });
+  append(p.rows);
+  cursor = p.nextSinceSeq;
+  if (!p.hasMore) break;
+}
+// 追平之后若 cursor < p.headSeq，而中间那几个号既 >= p.minVisibleSeq 又不在 rows 里，
+// 那是库里就没有那个号（占号成功而插入失败的代价），不是客户端漏了。
+```
+
+后三个字段的来历，都是客户端自己算不出来的那类：
+
+- `hasMore` 靠**多读一条**探出来：服务端按夹过的大写读 `cap + 1` 条、只回 `cap` 条，所以"这一页正好回满"
+  和"后面还有"是两件分得开的事；请求里的 `size` 会被 `z-msg.im.max-page-size` 夹掉，
+  拿回到的条数去和客户端自己给的 `size` 比，在夹了的那一档上永远是对的不上。
+- `nextSinceSeq` 是本次下限之后真正交出去的最后一条；空页时它就是本次生效的下限，
+  客户端照它传下次不会反复撞同一道墙。
+- `minVisibleSeq = max(请求的 sinceSeq, 本人的 cleared_seq) + 1`：被自己的"清空聊天记录"挡掉的那一段，
+  和"库里本来就没有"的那一段，靠它区分。`headSeq` 是读取时刻的会话水位（`last_msg_seq`），
+  在拉取之后才读，所以它只会等于或高于本次给出去的最后一条。
 
 ## 7. 外部渠道对接
 
@@ -310,6 +361,11 @@ FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers
 请求体键名：`conversationId, content, msgType, clientMsgId, atUserIds, replyToSeq, sinceSeq, seq,
 size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, userIds, role, muted, lastReadSeq`。
 
+`data` 的形状按端点分三类，别一律当数组接：`conversation/list` 是 `IPage`（行在 `records`，`total` 是真的）、
+`message/history` 是对象（行在 `rows`，另带四个判定量，见 §6）、
+只有 `conversation/members` 与 `read/receipts` 回裸数组。其余：`send`/`at` 回消息行、
+`message/head`·`conversation/clear`·`read/unread` 回数字、`mute`/`leave` 回布尔。
+
 **偏好 / 通道 / 事件 / 管理面**：
 
 | 方法 | 路径 | 认证 |
@@ -344,8 +400,8 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 
 `z-msg.ws.allowed-origins` 是**例外**：默认 `[]` 的含义是"不限 Origin"，不是"全部拒绝"——
 代码只在列表非空时调用 `setAllowedOrigins`。这不是疏漏，`WsProperties` 里写着理由：握手凭据是一次性
-短期票，必须由已认证的 HTTP 会话去 `/inbox/ws-token` 换，跨站页面读不到那个响应；能拿到票的人本来
-就已在登录态里。**如果宿主改成长期 token 走 query，请务必显式配上自己的域名。**
+短期票（这条保证在主干代码里，**已发布的 1.1.0 还没有**，见下面"票的一次性消费"），必须由已认证的 HTTP 会话去 `/inbox/ws-token` 换，跨站页面读不到那个响应；能拿到票的人本来
+就在登录态里。**如果宿主改成长期 token 走 query，请务必显式配上自己的域名。**
 
 **管理面为什么是开关而不是鉴权**：1.0.x 一直到 1.1.0 之前，`/api/msg/template/**`、`/api/msg/batch/**`、
 `/api/msg/delivery/**` 一次 `principalResolver` 都没调用过，`z-msg-web` 里也没有任何
@@ -361,7 +417,14 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 - `MsgDeliveryLogController#list` 在开关打开后仍按**请求体里客户端自报的 `userId`** 过滤——
   那是 PII，形状与 1.0.x 那个越权读收件箱的洞同一个。开关只是让它默认不存在。
 
-**其余已知取舍**：票在 TTL 内可重放（要一次性消费得加 jti 存储）；没有 in-band `op=auth` 续期，
+**票的一次性消费**（主干代码，尚未发布；已发布的 1.1.0 里票在 TTL 内仍可重放）：握手走 `RealtimeTicketService#consume`，一张票只换得到第一条连接，
+第二次握手 401 —— 因为票进过 URL 就会被 access log、代理日志、浏览器历史原样留下来。
+`verify` 保持纯验签、可重复调用，它**不是**安全闸门：验得通只说明"这张票是真的"，不说明"还没人用过"。
+边界照实说：记账在**进程内存**里，所以 ① 重启后旧票在 TTL 内还能再用一次 ② 多实例各记各的，
+一张票在 N 台节点上各能开一条 ③ 窗口内成功握手超过 2 万条时开始丢弃最早过期的记录（保证降级、但会 warn）。
+要跨实例严格一次，得把 jti 放进共享存储（Redis 之类），z-msg 不替你引这个依赖。
+
+**其余已知取舍**：没有 in-band `op=auth` 续期，
 超时后要重连；IM 已读游标与消息表是两处写，崩溃窗口内可能短暂偏差。
 
 ## 10. 配置全表
@@ -392,7 +455,7 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 | `inbox.default-page-size` / `max-page-size` | `20` / `200` | |
 | `inbox.expire-days` | `0` | 0 = 不过期 |
 | `realtime.ticket-secret` | `""` | 空 = fail closed |
-| `realtime.ticket-ttl-seconds` | `60` | |
+| `realtime.ticket-ttl-seconds` | `60` | 也是消费记录的存活时长：一张票只开一条连接，账在本进程内存里记到过期为止 |
 | `realtime.ticket-audience` | `z-msg-ws` | |
 
 `z-msg.web.*`：`trusted-header-enabled=false`、`trusted-header-name=X-Msg-User-Id`、
@@ -428,7 +491,7 @@ MySQL 与 H2 各一份，同源由 `SchemaParityTest` 真跑执行验证：
 
 ```bash
 cd z-msg
-mvn -B -o clean verify                        # 8 模块、168 例
+mvn -B -o clean verify                        # 8 模块、177 例（工作树；1.1.0 发布件是 168 例）
 mvn -B -o -DskipTests install                 # 装进 ~/.m2，一次即可
 mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 ```
@@ -441,10 +504,10 @@ mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 
 | 模块 | 关键几例 |
 |---|---|
-| core | `SchemaParityTest`（MySQL/H2 两份 DDL 真跑执行、同表同列）、`SenderRegistryProviderDefaultTest`（缺 provider 时兜底成 mock 且被如实标记）、`RealtimeTicketServiceTest`、`WebhookSenderTest`、`LegacySpiAdapterTest` |
+| core | `SchemaParityTest`（MySQL/H2 两份 DDL 真跑执行、同表同列）、`SenderRegistryProviderDefaultTest`（缺 provider 时兜底成 mock 且被如实标记）、`RealtimeTicketServiceTest` 11 例（签发/验签/过期/篡改之外，一次性消费那一格钉了五例：`consume` 只放行第一次、`verify` 仍可重复且**不是**安全闸门、按票记账不按用户、过期票不进账、2 万条上限真把住且超量时是降级不是拒登）、`WebhookSenderTest`、`LegacySpiAdapterTest` |
 | web | `MsgInboxApiTest` 8 例：匿名 401 而登录 200、`oneUserCannotSeeOrMutateAnotherUsersInbox`、过期项既不列表也不计红点、分页真截断且 `total` 是真的、同 `idempotencyKey` 不重复入库、自省接口如实标 mock、`ws-token` 绑当前人。`MsgAdminEndpointGateTest` 4 例：缺省时 9 条管理面请求（含挂在 `MessageController` 上的 `GET /delivery/stats`）一律 HTTP 403、403 正文里点名那个开关、非管理面端点照常答（且缺身份仍是 401 而不是被闸门顺手改成 403）、前缀匹配按路径段对齐。`MsgAdminEndpointEnabledTest` 1 例：同一批请求打开开关全 200 且返回真分页结构——这一例是前四例的对照，否则"路由压根没挂上"也能让 403 假绿 |
-| ws | 握手 fail-closed 2 例 / `enabled=false` 全撤 1 例 / 端到端 10 例 / 授权策略 4 例 / 注册表索引 1 例（8 持票 × 4 加入 × 20000 代对撞，并断言 `GENERATIONS*JOINERS` 次订阅全部成立——防止"对撞没跑满"的假绿） |
-| im | 自动装配 6 例（含"im 的 mapper 与 core 的 mapper 落在同一个 `sqlSessionFactoryMsg`"）、禁用路径 2 例（读 `ConditionEvaluationReport` 定位到 `OnPropertyCondition` 且点名 `im.enabled`）、三态授权 7 例、两条真 socket 的实时 6 例、REST 5 例、服务层 26 例 |
+| ws | 握手 fail-closed 2 例 / `enabled=false` 全撤 1 例 / 端到端 11 例（多的一例：同一张票第二次握手 401，且换一张新票同用户照样连得上） / 授权策略 4 例 / 注册表索引 1 例（8 持票 × 4 加入 × 20000 代对撞，并断言 `GENERATIONS*JOINERS` 次订阅全部成立——防止"对撞没跑满"的假绿） |
+| im | 自动装配 6 例（含"im 的 mapper 与 core 的 mapper 落在同一个 `sqlSessionFactoryMsg`"）、禁用路径 2 例（读 `ConditionEvaluationReport` 定位到 `OnPropertyCondition` 且点名 `im.enabled`）、三态授权 7 例、两条真 socket 的实时 6 例、REST 5 例、服务层 29 例（增量同步判定量那一格三例：`hasMore` 只能来自多读的那一条、照 `nextSinceSeq` 翻到底一条不多一条不少、`minVisibleSeq` 报的是真生效的那个游标而不是客户端要的那个） |
 | example | 7 例：A 发言进 B 的帧、未放行 topic 被拒而大厅同连接可发、站内信三处同时命中、未登录 401、首页真伺服、同一个 cookie jar 里两个标签页仍是两个人，外加 `MsgAdminSurfaceCensusTest`：在这个全量装配的宿主里把活的 handler mapping 逐条过闸门，钉住"拦下 12 条 / 放行 32 条"两份清单，并先断言普查真的数到了 40+ 个映射 |
 
 这些不是"跑过一遍绿了"就完事：每条新增的守卫都做过变异验证（摘掉守卫必须变红，然后按 `md5`
@@ -452,6 +515,19 @@ mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 前缀匹配退化成裸 `startsWith`、默认值翻成开、判定恒真（拦下所有端点，连带把收件箱与收件箱用例一起打红）、
 判定恒假、以及两支专打普查的（删前缀 → 拦下的那份不等；新加一个 `/api/msg/p8probe` controller →
 放行的那份不等）。九支全部落到具名用例变红，还原后 `md5` 逐字节一致。
+"票的一次性消费"这一轮另跑两支：拦截器把 `consume` 换回 `verify` ⇒ ws 用例红在
+`同一张票第二次握手必须 401 ==> expected: <401> but was: <101>`；`putIfAbsent` 退化成
+先查后写的 `get`（记不上账）⇒ core 两条红在 `expected: <null> but was: <88>` / `<9>`。
+"增量同步判定量"这一轮跑了六支，六支全部落到具名断言变红（还原同样走 `cp` 副本 + `md5` 对账）：
+多读的那一条摘掉（`size + 1` 改回 `size`）⇒ `被夹掉之后仍要说清后面还有 ==> expected: <true> but was: <false>`；
+`hasMore` 退化成"回满一页就算还有"⇒ `满页不等于还有：hasMore 只能来自多读的那一条 expected: <false> but was: <true>`；
+空页的 `nextSinceSeq` 归零 ⇒ 三条红（REST 层 `空页的游标就是本次生效的下限 <2> but was: <0>`、
+翻页循环 `expected: <10> but was: <0>`、`游标按生效下限给 <5> but was: <0>`）；
+`minVisibleSeq` 少加一 ⇒ 三条红（`<3> but was: <2>`、`<6> but was: <5>`、`没清空过，可见下界就是 1 <1> but was: <0>`）；
+`headSeq` 改成从行集里取（也就是"永远看不出洞"）⇒ 两条红（`水位比拿到的最后一条高 1：空洞就此显形 expected: <5> but was: <4>`、
+REST 的 `水位仍是清空时的位置 <2> but was: <0>`）；摘掉探针行的截断 ⇒ 三条红，其中一条是**旧的**
+`historyIsAscendingIncrementalAndCappedInSql`，说明这一档本来就有守卫在看着。
+上面这几轮的每一支注入都是按 `cp` 副本还原、`md5` 与注入前逐字节一致后再复跑全绿的。
 
 ---
 
@@ -501,6 +577,24 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
 `POST /api/msg/{template,batch,delivery}/list` 与 `GET /api/msg/delivery/stats` 在 1.1.0 **仍在**，
 不用改——但它们是 §9 那个"完全不做身份校验"的管理面，改不改端点都要一并处理。
 
+### 1.1.0 之后的读侧形状变更（主干代码，尚未发布）
+
+下面这一条**不在 1.1.0 的发布件里**，写在主干上；要对外生效必须抬版本号（1.1.0 永久占位）：
+
+| 1.1.0 已发布 | 主干 | 迁移动作 |
+|---|---|---|
+| `POST /api/msg/im/message/history` → `data` 是**消息数组** | `data` 是对象：`{ rows, nextSinceSeq, hasMore, headSeq, minVisibleSeq }` | 行从 `data` 改读 `data.rows`；翻页别再自己拼 `sinceSeq = rows[rows.length-1].seq`，直接用 `nextSinceSeq`；原先"回了 `size` 条就当还有下一批"的判断可以整段删掉，换 `hasMore` |
+
+`ImMessageService#history(...)` 那个返回 `List<ImMessageDO>` 的签名**保留**（它就是
+`historyPage(...).getRows()`，同一个查询、同一套可见性口径），所以 Java 侧的宿主不改也能编过、
+行为不变；只有走 HTTP 的客户端会看到这个形状变化。
+
+改动代价在本仓库里量过，是零：`z-msg-im` 只被 `z-msg-example` 一个下游 pom 引用；
+示例宿主的页面只调 `/inbox`、`/inbox/ws-token` 与 WS，没调过 `/history`；z-opc 前端
+（`z-opc/bootstraps/z-opc-main-starter-frontend/src/msg/`，实测 6 个文件含 dist）里
+`msg/im` **0 命中**。也就是说目前没有任何已知客户端会因为这一条断掉——但它是破坏性的，
+所以只跟着版本号出去。
+
 ## 15. 设计参考（GitHub 同类项目）
 
 看过一圈，取的是形状不是代码（stars 为写作时 `gh api` 实测）：
@@ -523,9 +617,12 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
 
 - 管理面的**角色判定**（见 §9）：1.1.0 落的是"默认关 + 一行 yml 打开"，
   "谁能审批模板、谁能翻别人的投递日志"仍然完全由宿主前置的登录墙决定；
-- 票的一次性消费（jti 存储），现在 TTL 内可重放；
+- 把 jti 记账换成共享存储，做到跨实例严格一次（现在是每实例各记，见 §9）；
 - `op=auth` in-band 续期，长连接超过 60s 后换身份只能重连；
-- 增量同步缺 `min_seq`/空洞信号，客户端无法察觉被丢弃的历史段；
+- 增量同步的判定量（`hasMore`/`nextSinceSeq`/`headSeq`/`minVisibleSeq`）已在主干落了 REST 形状（§6、§14），
+  但它只让客户端**看得见**洞：占号 CAS 成功而随后的 INSERT 失败时，水位不会让回去，
+  那个号就永久空着。写侧的 seq 回收仍然待议（要做就得连"让回去的号可能已经被更晚的写占走"一起想清楚）；
+  而这一条形状要对外生效必须抬版本号发布；
 - provider 出网白名单（SSRF 面：`url`/`base-url` 目前由配置决定，scheme 白名单已有，host 未限）；
 - 摘要合并窗口与时区感知的静默时段；
 - 腾讯云 SMS / SendGrid / 极光 / FCM-APNs 的 sender 实现。
