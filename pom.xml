@@ -10,9 +10,15 @@
         使用 ${revision} (CI-friendly versions) + flatten-maven-plugin 发版自动替换.
 
         模块结构:
-          - z-msg-api          : 纯 SPI (MessageGateway/MessageBus/EmailSender/SmsSender/Channels), 零实现
-          - z-msg-core         : 默认实现 (Mock/Smtp + ChannelRouter + RateLimiter + 模板 + 7 DO)
+          - z-msg-api          : 纯 SPI (MessageGateway/MessageBus/ChannelSender/RealtimePublisher/
+                                 TopicAuthorizationPolicy/Channels), 零实现
+          - z-msg-core         : 默认实现 (Mock/Smtp + SenderRegistry + ChannelRouter + RateLimiter
+                                 + 模板 + 站内信 + ws-ticket 签发校验 + DDL)
           - z-msg-web          : Spring Boot Controller 层 + AutoConfiguration (spring.factories)
+          - z-msg-ws           : WebSocket 实时接入 (短期 ticket 握手 + topic 三态授权 + 在线注册表)
+          - z-msg-im           : 会话/成员/seq/已读回执, 实时下发只依赖 api 的 RealtimePublisher
+          - z-msg-channels     : 真实外部渠道 provider (钉钉/企微/飞书/Slack/公众号/短信云厂商)
+          - z-msg-example      : 五分钟聊天室 + 站内信 demo, 不发中央仓库
         注: z-msg-spring-boot-starter 已下沉到 z-boot/z-boot-middleware-starters
     -->
     <groupId>io.github.yuku123</groupId>
