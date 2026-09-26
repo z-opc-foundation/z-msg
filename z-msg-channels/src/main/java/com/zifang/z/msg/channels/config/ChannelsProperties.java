@@ -20,7 +20,7 @@ import java.util.Map;
  * provider/fallback-channels/enabled 三个字段，其余字段由本类消费；
  * 双方对不认识的字段都默认忽略（Spring Boot 的 ignoreUnknownFields=true）。
  * <p>
- * 敏感值（secret / token / appSecret / accessKeySecret）应由宿主用环境变量注入；
+ * 敏感值（secret / token / appSecret / accessKeySecret / masterSecret）应由宿主用环境变量注入；
  * provider 在任何日志里都不输出它们原文（有专门测试钉住这一点）。
  */
 @ConfigurationProperties(prefix = "z-msg.channel")
@@ -104,12 +104,12 @@ public class ChannelsProperties extends LinkedHashMap<String, ChannelsProperties
         private String appSecret;
 
         /**
-         * 云厂商 AccessKeyId（阿里云短信）
+         * 云厂商 AccessKeyId（阿里云短信）/ SecretId（腾讯云短信）
          */
         private String accessKeyId;
 
         /**
-         * 云厂商 AccessKeySecret（阿里云短信）
+         * 云厂商 AccessKeySecret（阿里云短信）/ SecretKey（腾讯云短信）
          */
         private String accessKeySecret;
 
@@ -119,15 +119,30 @@ public class ChannelsProperties extends LinkedHashMap<String, ChannelsProperties
         private String signName;
 
         /**
-         * 模板 id：短信 TemplateCode / 公众号 template_id；
+         * 模板 id：短信 TemplateCode / 腾讯云 TemplateId / 公众号 template_id；
          * 消息 param("templateCode") 可逐条覆盖
          */
         private String templateCode;
 
         /**
-         * 云厂商地域，如 cn-hangzhou（阿里云短信 endpoint 路由用）
+         * 云厂商地域，如 cn-hangzhou（阿里云短信 endpoint 路由用）、ap-guangzhou（腾讯云 X-TC-Region）
          */
         private String region;
+
+        /**
+         * 腾讯云短信 SmsSdkAppId（应用侧的 1400xxxxxxx，与极光 appKey 不是一回事）
+         */
+        private String sdkAppId;
+
+        /**
+         * 极光推送 App Key（Basic 认证的用户名段）
+         */
+        private String appKey;
+
+        /**
+         * 极光推送 Master Secret（Basic 认证的口令段；只进 Authorization header，绝不上日志）
+         */
+        private String masterSecret;
 
         /**
          * 签名协议版本（阿里云 RPC 签名为 "1.0"，随公共参数 SignatureVersion 上送）
@@ -272,6 +287,30 @@ public class ChannelsProperties extends LinkedHashMap<String, ChannelsProperties
 
         public void setRegion(String region) {
             this.region = region;
+        }
+
+        public String getSdkAppId() {
+            return sdkAppId;
+        }
+
+        public void setSdkAppId(String sdkAppId) {
+            this.sdkAppId = sdkAppId;
+        }
+
+        public String getAppKey() {
+            return appKey;
+        }
+
+        public void setAppKey(String appKey) {
+            this.appKey = appKey;
+        }
+
+        public String getMasterSecret() {
+            return masterSecret;
+        }
+
+        public void setMasterSecret(String masterSecret) {
+            this.masterSecret = masterSecret;
         }
 
         public String getSignatureVersion() {

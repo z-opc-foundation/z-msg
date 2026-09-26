@@ -5,11 +5,17 @@ import javax.crypto.spec.SecretKeySpec;
 import java.io.UnsupportedEncodingException;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.TimeZone;
+import java.util.TreeMap;
 
 /**
  * 各家渠道的签名原语（HmacSHA256/HmacSHA1/Base64/百分号编码）。
@@ -126,5 +132,139 @@ public final class Signatures {
         public String getSignature() {
             return signature;
         }
+    }
+
+    /**
+     * 腾讯云 API 3.0 签名（TC3-HMAC-SHA256）。
+     * <p>
+     * 规范形状（四步，任何一步偏一格服务端就是 AuthFailure.SignatureFailure）：
+     * <ol>
+     *   <li>canonical request =
+     *       {@code POST\n<uri>\n<query>\n<小写 key 字典序的 header 行，每行以 \n 结尾>\n\n<signedHeaders>\n<Hex(SHA256(payload))>}
+     *       —— 注意 header 段自带结尾换行，所以它与 signedHeaders 之间还有一个空行；</li>
+     *   <li>string to sign = {@code TC3-HMAC-SHA256\n<timestampSeconds>\n<date(UTC yyyy-MM-dd)>\n<Hex(SHA256(canonical))>}；</li>
+     *   <li>派生密钥链 = {@code HMAC(key="TC3"+secretKey, data=date) → service → "tc3_request"}；</li>
+     *   <li>signature = {@code HexLowercase(HMAC(kSigning, stringToSign))}（是十六进制，不是 Base64）。</li>
+     * </ol>
+     * 只有 {@code signedHeaders} 列出的头参与签名，其余头（如 X-TC-*）可以照常上送。
+     *
+     * @param service       服务名，短信是 {@code sms}；同时出现在 Credential 作用域里
+     * @param headers       参与签名的头，key 大小写不限（内部统一转小写），值按规范折叠空白
+     * @param canonicalUri  已按规范百分号编码的 URI，例如 {@code /}
+     * @param canonicalQuery 已按规范编码的 query，无参数传空串
+     */
+    public static Tc3Signed tc3Sign(String secretId, String secretKey, String service,
+                                    String httpMethod, String canonicalUri, String canonicalQuery,
+                                    Map<String, String> headers, long timestampSeconds, String payload) {
+        Map<String, String> sorted = new TreeMap<>();
+        if (headers != null) {
+            for (Map.Entry<String, String> e : headers.entrySet()) {
+                if (e.getKey() == null) {
+                    continue;
+                }
+                sorted.put(collapseSpaces(e.getKey().toLowerCase(Locale.ROOT)),
+                        collapseSpaces(e.getValue() == null ? "" : e.getValue()));
+            }
+        }
+        StringBuilder canonicalHeaders = new StringBuilder();
+        StringBuilder signedHeaders = new StringBuilder();
+        for (Map.Entry<String, String> e : sorted.entrySet()) {
+            canonicalHeaders.append(e.getKey()).append(':').append(e.getValue()).append('\n');
+            if (signedHeaders.length() > 0) {
+                signedHeaders.append(';');
+            }
+            signedHeaders.append(e.getKey());
+        }
+        String hashedPayload = sha256Hex(payload == null ? "" : payload);
+        String canonicalRequest = httpMethod.toUpperCase(Locale.ROOT) + "\n" + canonicalUri + "\n"
+                + (canonicalQuery == null ? "" : canonicalQuery) + "\n"
+                + canonicalHeaders + "\n" + signedHeaders + "\n" + hashedPayload;
+        String date = utcDate(timestampSeconds);
+        String stringToSign = "TC3-HMAC-SHA256\n" + timestampSeconds + "\n" + date + "\n"
+                + sha256Hex(canonicalRequest);
+        byte[] kDate = hmac("HmacSHA256", ("TC3" + secretKey).getBytes(StandardCharsets.UTF_8), date);
+        byte[] kService = hmac("HmacSHA256", kDate, service);
+        byte[] kSigning = hmac("HmacSHA256", kService, "tc3_request");
+        String signature = hex(hmac("HmacSHA256", kSigning, stringToSign));
+        String authorization = "TC3-HMAC-SHA256 Credential=" + secretId + "/" + date + "/"
+                + service + "/tc3_request, SignedHeaders=" + signedHeaders + ", Signature=" + signature;
+        return new Tc3Signed(canonicalRequest, stringToSign, signedHeaders.toString(), signature, authorization);
+    }
+
+    /** UTC 日期串（TC3 的 date 既进 string to sign，也进 Credential 作用域）。 */
+    public static String utcDate(long epochSeconds) {
+        SimpleDateFormat fmt = new SimpleDateFormat("yyyy-MM-dd");
+        fmt.setTimeZone(TimeZone.getTimeZone("UTC"));
+        return fmt.format(new java.util.Date(epochSeconds * 1000L));
+    }
+
+    /** HexLowercase(SHA256(text))，UTF-8 字节。 */
+    public static String sha256Hex(String text) {
+        try {
+            return hex(MessageDigest.getInstance("SHA-256")
+                    .digest(text.getBytes(StandardCharsets.UTF_8)));
+        } catch (Exception e) {
+            throw new IllegalStateException("SHA-256 不可用", e);
+        }
+    }
+
+    private static String hex(byte[] raw) {
+        StringBuilder sb = new StringBuilder(raw.length * 2);
+        for (byte b : raw) {
+            sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
+        }
+        return sb.toString();
+    }
+
+    /** 规范要求的 header 值折叠：去首尾空白、内部连续空白压成一个空格。 */
+    private static String collapseSpaces(String v) {
+        return v.trim().replaceAll("\\s+", " ");
+    }
+
+    /** 固定结构：canonical request / 待签串 / SignedHeaders / 签名 / 完整 Authorization。 */
+    public static final class Tc3Signed {
+        private final String canonicalRequest;
+        private final String stringToSign;
+        private final String signedHeaders;
+        private final String signature;
+        private final String authorization;
+
+        Tc3Signed(String canonicalRequest, String stringToSign, String signedHeaders,
+                  String signature, String authorization) {
+            this.canonicalRequest = canonicalRequest;
+            this.stringToSign = stringToSign;
+            this.signedHeaders = signedHeaders;
+            this.signature = signature;
+            this.authorization = authorization;
+        }
+
+        public String getCanonicalRequest() {
+            return canonicalRequest;
+        }
+
+        public String getStringToSign() {
+            return stringToSign;
+        }
+
+        public String getSignedHeaders() {
+            return signedHeaders;
+        }
+
+        public String getSignature() {
+            return signature;
+        }
+
+        public String getAuthorization() {
+            return authorization;
+        }
+    }
+
+    /**
+     * Basic 认证头值：{@code Basic Base64(user + ":" + password)}（UTF-8 字节），极光用它。
+     * 返回整串（含 "Basic " 前缀），调用方直接塞进 Authorization。
+     */
+    public static String basicAuth(String user, String password) {
+        return "Basic " + Base64.getEncoder().encodeToString(
+                (user + ":" + password).getBytes(StandardCharsets.UTF_8));
     }
 }
