@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>z-msg 演示：大厅聊天室 + 站内信</title>
+<style>
+  :root { --bg:#0f1115; --panel:#161a22; --line:#242b38; --fg:#dfe6f1; --dim:#8a95a8; --ok:#4ade80; --warn:#fbbf24; --err:#f87171; --me:#2b4a7a; --other:#2f3646; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:14px/1.5 -apple-system,"PingFang SC","Microsoft YaHei",sans-serif; }
+  header { padding:12px 16px; border-bottom:1px solid var(--line); display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  header h1 { font-size:15px; margin:0 auto 0 0; font-weight:600; }
+  .who { color:var(--dim); font-size:12px; }
+  main { display:grid; grid-template-columns: 1.2fr 1fr; gap:12px; padding:12px; }
+  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; display:flex; flex-direction:column; min-height:420px; }
+  .panel > h2 { font-size:13px; margin:0; padding:10px 12px; border-bottom:1px solid var(--line); color:var(--dim); font-weight:600; display:flex; align-items:center; gap:8px; }
+  .body { flex:1; overflow:auto; padding:10px 12px; }
+  .row { display:flex; gap:8px; padding:8px 12px; border-top:1px solid var(--line); }
+  input, button, textarea { font:inherit; color:inherit; background:#0c1017; border:1px solid var(--line); border-radius:8px; padding:7px 10px; }
+  input, textarea { flex:1; min-width:0; }
+  button { cursor:pointer; background:#1d2735; }
+  button:hover { border-color:#3b4b63; }
+  button.on { background:var(--me); border-color:#3f6ba8; }
+  .bubble { max-width:78%; padding:6px 10px; margin:0 0 8px; border-radius:10px; background:var(--other); }
+  .bubble.me { background:var(--me); margin-left:auto; }
+  .bubble .name { display:block; font-size:11px; color:#a9c0e6; margin-bottom:2px; }
+  .bubble .state { font-size:11px; color:var(--dim); margin-left:6px; }
+  .inbox { padding:8px 10px; border:1px solid var(--line); border-radius:8px; margin-bottom:8px; cursor:pointer; background:#12161d; }
+  .inbox.unread { border-color:#3b5bdb; background:#141a26; }
+  .inbox b { display:block; font-size:13px; }
+  .inbox small { color:var(--dim); display:block; }
+  .inbox small + small { margin-top:4px; }
+  .dot { width:8px; height:8px; border-radius:50%; background:#586274; display:inline-block; }
+  .dot.up { background:var(--ok); } .dot.down { background:var(--err); }
+  .badge { background:#3b5bdb; border-radius:10px; padding:0 7px; font-size:12px; }
+  #log { font:11px/1.45 ui-monospace,SFMono-Regular,Menlo,monospace; color:var(--dim); white-space:pre-wrap; word-break:break-all; }
+  .toast { position:fixed; right:14px; bottom:14px; background:#1d2735; border:1px solid var(--line); border-left:3px solid var(--warn); border-radius:8px; padding:9px 12px; max-width:60vw; opacity:0; transition:opacity .2s; }
+  .toast.show { opacity:1; }
+  .hint { color:var(--dim); font-size:12px; padding:0 12px 10px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>z-msg · 大厅聊天室 + 站内信</h1>
+  <span class="who">我是</span>
+  <button id="u1001" data-as="1001">1001 张三</button>
+  <button id="u1002" data-as="1002">1002 李四</button>
+  <span class="dot" id="sock"></span>
+  <span class="who" id="state">未登录</span>
+  <span class="who">未读 <span class="badge" id="unread">-</span></span>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>大厅 <span class="who">room:lobby，连接建立即自动订阅</span></h2>
+    <div class="body" id="chat"></div>
+    <div class="hint">这条消息走的是 <code>{"op":"publish"}</code>：写侧默认全拒，是宿主注册的一个
+      <code>TopicAuthorizationPolicy</code> 放开了 room:lobby（见 <code>chat/LobbyChatPolicy.java</code>）。
+      开两个标签页分别登 1001 / 1002 才看得到对面收到。</div>
+    <div class="row">
+      <input id="text" placeholder="说点什么，回车发送" autocomplete="off">
+      <button id="send">发送</button>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>我的站内信 <span class="who">user:&lt;自己&gt;</span></h2>
+    <div class="body" id="inbox"></div>
+    <div class="hint">下面的按钮调 <code>POST /demo/notify</code>，宿主侧代码就是一句
+      <code>gateway.send(IN_APP)</code>：在线的那个人立刻收到 <code>kind=inbox</code> 帧，红点当场加一。</div>
+    <div class="row">
+      <input id="title" value="订单已发货" autocomplete="off">
+      <button id="notify-me">发给自己</button>
+      <button id="notify-other">发给对方</button>
+    </div>
+  </section>
+</main>
+
+<section class="panel" style="margin:0 12px 14px;">
+  <h2>帧日志 <span class="who">收发的原始帧，payload 是 JSON 字符串所以要再解析一次</span></h2>
+  <div class="body" id="log" style="min-height:120px;max-height:220px;"></div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  var LOBBY = 'room:lobby';
+  var me = null, myName = null, ws = null, seq = 0, pingTimer = null;
+  var pending = {};   // clientMsgId -> 气泡元素，等服务端原样回带 clientMsgId 来对号
+
+  // 一个浏览器只有一个 cookie jar，两个标签页带的是同一个 JSESSIONID —— 只用 cookie 的话
+  // 标签 2 登录会把标签 1 的身份改掉，"开两个标签页分别当张三李四"就成了假话。
+  // sessionStorage 恰好是每个标签一份的，所以这里给每个标签一把随机句柄，每个请求都带上，
+  // 服务端按它认人（身份仍然只在 /demo/login 时由服务端登记，客户端报不出别人的 userId）。
+  var TAB = (function () {
+    var KEY = 'z-msg-demo-tab';
+    var v = null;
+    try { v = sessionStorage.getItem(KEY); } catch (e) { return 'tab-' + Math.random().toString(36).slice(2); }
+    if (!v) {
+      v = 'tab-' + Math.random().toString(36).slice(2) + '-' + Date.now().toString(36);
+      try { sessionStorage.setItem(KEY, v); } catch (e) {}
+    }
+    return v;
+  })();
+
+  function other() { return String(me) === '1001' ? '1002' : '1001'; }
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  function log(text) {
+    var box = $('log');
+    box.textContent = text + '\n' + box.textContent;
+    if (box.textContent.length > 20000) { box.textContent = box.textContent.slice(0, 20000); }
+  }
+
+  function toast(text) {
+    var el = $('toast');
+    el.textContent = text;
+    el.classList.add('show');
+    setTimeout(function () { el.classList.remove('show'); }, 2600);
+  }
+
+  function api(path, method, body) {
+    var headers = { 'X-Demo-Tab': TAB };
+    if (body) { headers['Content-Type'] = 'application/json'; }
+    return fetch(path, {
+      method: method || 'GET',
+      credentials: 'same-origin',
+      headers: headers,
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function (r) { return r.json(); });
+  }
+
+  // ---------- 渲染 ----------
+
+  function bubble(name, text, mine) {
+    var el = document.createElement('div');
+    el.className = 'bubble' + (mine ? ' me' : '');
+    var n = document.createElement('span');
+    n.className = 'name';
+    n.textContent = name;
+    var body = document.createElement('span');
+    // 一律 textContent：聊天内容里出现 <img onerror=...> 也只当字面量，不进 DOM
+    body.textContent = text;
+    el.appendChild(n);
+    el.appendChild(body);
+    $('chat').appendChild(el);
+    $('chat').scrollTop = $('chat').scrollHeight;
+    return el;
+  }
+
+  function markSent(clientMsgId, delivered) {
+    var el = pending[clientMsgId];
+    if (!el) { return; }
+    var s = document.createElement('span');
+    s.className = 'state';
+    s.textContent = delivered > 0 ? '已送达 ' + delivered : '已发出（当前没人在线）';
+    el.appendChild(s);
+    delete pending[clientMsgId];
+  }
+
+  // ---------- 站内信 ----------
+
+  function refreshUnread() {
+    return api('/api/msg/inbox/unread-count').then(function (res) {
+      $('unread').textContent = res && res.success ? res.data : '?';
+    });
+  }
+
+  function refreshInbox() {
+    return api('/api/msg/inbox/list?page=1&size=20').then(function (res) {
+      var box = $('inbox');
+      box.textContent = '';
+      if (!res || !res.success) {
+        box.textContent = (res && res.message) || '读取失败';
+        return;
+      }
+      var rows = (res.data && res.data.records) || [];
+      if (!rows.length) { box.textContent = '还没有消息'; }
+      rows.forEach(function (row) {
+        var el = document.createElement('div');
+        // 列表里的已读标记是 isRead(0/1)；实时帧里的 payload 才是 unread=true，两者别混用
+        el.className = 'inbox' + (row.isRead === 0 ? ' unread' : '');
+        var b = document.createElement('b');
+        b.textContent = row.title || '(无标题)';
+        var s = document.createElement('small');
+        // 列表投影里没有 content 这一列（正文是 CLOB，不该跟着列表整坨回来），
+        // 所以这里只显示时间，正文要点开 /detail 才拿得到。
+        s.textContent = row.createdTime || '';
+        var body = document.createElement('small');
+        el.appendChild(b);
+        el.appendChild(s);
+        el.appendChild(body);
+        el.onclick = function () {
+          if (el.classList.contains('open')) { return; }
+          api('/api/msg/inbox/read?id=' + encodeURIComponent(row.id), 'POST').then(function () {
+            el.classList.add('open', 'read');
+            el.classList.remove('unread');
+            refreshUnread();
+            return api('/api/msg/inbox/detail?id=' + encodeURIComponent(row.id));
+          }).then(function (d) {
+            // 一律 textContent：正文里出现 <img onerror=...> 也只当字面量
+            body.textContent = (d && d.success && d.data) ? String(d.data.content || '（这条没有正文）')
+                                                          : '（详情读取失败）';
+          });
+        };
+        box.appendChild(el);
+      });
+    });
+  }
+
+  // ---------- WebSocket ----------
+
+  function connect() {
+    return api('/api/msg/inbox/ws-token').then(function (res) {
+      if (!res || !res.success) {
+        $('state').textContent = '换票失败：' + ((res && res.message) || 'HTTP 未认证');
+        throw new Error('ws-token: ' + (res && res.message));
+      }
+      var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+      // 浏览器建 WebSocket 带不上自定义头，所以身份靠这个 60 秒短期票走 query
+      open(proto + location.host + '/api/msg/ws?token=' + encodeURIComponent(res.data.token));
+    });
+  }
+
+  function open(url) {
+    if (ws) { try { ws.close(); } catch (e) {} }
+    ws = new WebSocket(url);
+    ws.onopen = function () { $('sock').className = 'dot up'; $('state').textContent = myName + '（已连接）'; };
+    ws.onclose = function () {
+      $('sock').className = 'dot down';
+      $('state').textContent = myName + '（已断开）';
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+    };
+    ws.onerror = function () { toast('连接出错，看帧日志'); };
+    ws.onmessage = function (evt) {
+      var f = JSON.parse(evt.data);
+      log('← ' + evt.data);
+      if (f.op === 'ready') {
+        var info = JSON.parse(f.payload);
+        log('自动订阅: ' + info.topics.join(', '));
+      } else if (f.op === 'message' && f.kind === 'chat') {
+        var chat = JSON.parse(f.payload);
+        // 自己发的那条服务端会原样回给包括自己在内的所有订阅者（含本人），
+        // 所以这里要按载荷里的 userId 去重，否则每个气泡会画两遍；
+        // "送达"状态由 ack 帧带 clientMsgId 回来时更新（见 markSent）
+        if (String(chat.userId) === String(me)) { return; }
+        bubble(String(chat.from || '匿名'), String(chat.text || ''), false);
+      } else if (f.op === 'message' && f.kind === 'inbox') {
+        var mail = JSON.parse(f.payload);
+        toast('站内信：' + (mail.title || ''));
+        refreshInbox(); refreshUnread();
+      } else if (f.op === 'ack') {
+        var payload = f.payload ? JSON.parse(f.payload) : {};
+        if (f.clientMsgId && payload.delivered !== undefined) { markSent(f.clientMsgId, payload.delivered); }
+      } else if (f.op === 'error') {
+        toast(f.errorCode + '：' + f.errorMessage);
+      }
+    };
+    pingTimer = setInterval(function () {
+      if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ op: 'ping', clientMsgId: 'p' + (++seq) })); }
+    }, 20000);
+  }
+
+  function publish(text) {
+    var clientMsgId = 'c' + (++seq);
+    pending[clientMsgId] = bubble(myName + '（发送中）', text, true);
+    var frame = { op: 'publish', clientMsgId: clientMsgId, topic: LOBBY, kind: 'chat',
+                  payload: { userId: me, from: myName, text: text } };
+    log('→ ' + JSON.stringify(frame));
+    ws.send(JSON.stringify(frame));
+  }
+
+  // ---------- 交互 ----------
+
+  function login(as) {
+    return api('/demo/login?as=' + as, 'POST').then(function (res) {
+      if (!res || !res.success) { toast(res && res.message || '登录失败'); return; }
+      me = res.data.userId; myName = res.data.nickname;
+      $('u1001').classList.toggle('on', String(me) === '1001');
+      $('u1002').classList.toggle('on', String(me) === '1002');
+      $('chat').textContent = ''; $('inbox').textContent = '';
+      refreshUnread(); refreshInbox(); connect();
+    });
+  }
+
+  function notify(to) {
+    var q = 'title=' + encodeURIComponent($('title').value || '有一条新消息');
+    if (to) { q += '&to=' + encodeURIComponent(to); }
+    api('/demo/notify?' + q, 'POST').then(function (res) {
+      if (!res || !res.success) { toast('发送失败：' + ((res && res.message) || '')); return; }
+      var r = res.data;
+      toast(r && r.success ? '已投到 ' + (to || me) + ' 的收件箱' : '投递失败：' + (r && r.errorMessage));
+    });
+  }
+
+  $('u1001').onclick = function () { login('1001'); };
+  $('u1002').onclick = function () { login('1002'); };
+  $('send').onclick = function () {
+    var v = $('text').value.trim();
+    if (!v) { return; }
+    if (!ws || ws.readyState !== 1) { toast('还没连上'); return; }
+    publish(v); $('text').value = '';
+  };
+  $('text').addEventListener('keydown', function (e) { if (e.key === 'Enter') { $('send').click(); } });
+  $('notify-me').onclick = function () { notify(null); };
+  $('notify-other').onclick = function () { notify(other()); };
+})();
+</script>
+</body>
+</html>

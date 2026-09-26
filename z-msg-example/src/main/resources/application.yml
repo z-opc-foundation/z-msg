@@ -1,0 +1,64 @@
+# z-msg-example —— 起得来、点得动的最小宿主
+#
+# 跑法：cd z-msg && mvn -B -o -pl z-msg-example spring-boot:run
+#      然后开两个标签页进 http://localhost:18099/，一个当 1001 一个当 1002。
+#
+# 数据源不在这里配：演示用内存 H2，见 MsgExampleApplication#dataSourceMsg。
+# 接生产删掉那个 bean，改成下面的键（z-msg-web 里 MsgAutoConfiguration 继承
+# ModuleDataSourceTemplate 读的就是它们，注意是 z.base.db.*，不是 z.msg.*）：
+#   z:
+#     base:
+#       db:
+#         msg:
+#           host: 127.0.0.1
+#           port: 3306
+#           database: msg
+#           username: ${MSG_DB_USER}
+#           password: ${MSG_DB_PASS}
+
+server:
+  port: 18099
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        same-site: lax
+
+spring:
+  application:
+    name: z-msg-example
+
+z-msg:
+  enabled: true
+  realtime:
+    # 没配这把密钥时 /api/msg/inbox/ws-token 与握手一律 503（fail closed，不签弱密钥票）。
+    # 演示值就写在仓库里，生产必须从环境注入，且不要复用这一串。
+    ticket-secret: demo-only-0123456789abcdef-change-me
+    ticket-ttl-seconds: 60
+  ws:
+    enabled: true
+    path: /api/msg/ws
+    # 连接建立即自动订阅这些 topic：大厅聊天室就靠这一行省掉前端的第一次 subscribe
+    public-topics:
+      - room:lobby
+    # 演示不限来源。一旦把长期凭证换成短期 ticket 放进 URL，生产要把这个列表写死成前端域名。
+    allowed-origins: []
+    max-sessions-per-user: 8
+    max-topics-per-connection: 64
+  web:
+    # 身份走宿主自己的 MsgPrincipalResolver（见 demo/DemoSessionPrincipalResolver），
+    # 所以这里保持关：开着它 = 相信上游网关会剥掉客户端自带的 X-Msg-User-Id
+    trusted-header-enabled: false
+    # 那个端点能往任意 userId 的收件箱塞消息，演示里改用 /demo/notify（身份来自 session）
+    publish-endpoint-enabled: false
+    # 模板/批量/投递日志三组管理面端点，默认关（一律 403）。演示页只用得到收件箱，
+    # 真要演示后台再打开，别在生产的宿主里长期开着。
+    admin-endpoints-enabled: false
+  inbox:
+    push-realtime: true
+
+logging:
+  level:
+    root: INFO
+    com.zifang.z.msg: INFO
+    com.alibaba.druid: WARN

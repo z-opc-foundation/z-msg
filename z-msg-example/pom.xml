@@ -105,8 +105,10 @@
                 <version>${spring-boot.version}</version>
                 <configuration>
                     <mainClass>com.zifang.z.msg.example.MsgExampleApplication</mainClass>
-                    <!-- 示例只用于 spring-boot:run，不产出 fat jar，避免被误当作可发布构件 -->
-                    <skip>true</skip>
+                    <!-- 这里原先还有一条 <skip>true</skip>：它确实挡住了 fat jar，
+                         但也一起挡住了本模块唯一的用途 spring-boot:run —— skip 是插件级
+                         configuration，AbstractRunMojo 同样读它。不产 fat jar 靠的是本模块
+                         没给 repackage 绑 execution，不是靠这个 skip。 -->
                 </configuration>
             </plugin>
         </plugins>
