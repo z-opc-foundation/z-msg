@@ -55,7 +55,7 @@
 | `z-msg-web` | REST Controller + `MsgAutoConfiguration`（`spring.factories`）+ 身份接缝 + 管理面闸门 `AdminEndpointGate` | 13 |
 | `z-msg-ws` | WebSocket 实时接入层：短期票握手、帧协议、topic 订阅、三态授权、在线注册表 | 18 |
 | `z-msg-im` | 会话/成员/消息/已读回执域，seq 分配与增量同步，自带 4 张表与 REST | 52 |
-| `z-msg-example` | 能跑的大厅聊天室 + 站内信宿主（**不进发布清单**），顺带承载端点普查 | 7 |
+| `z-msg-example` | 能跑的大厅聊天室 + 站内信宿主（**从下一版起不进发布清单**，见 §14），顺带承载端点普查 | 7 |
 
 深入文档各就各位，本 README 只讲清边界与入口：
 
@@ -476,6 +476,17 @@ mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 
 旧前缀写错的地方也一并纠正：README 1.0.0 里的 `z.msg.*` 从来就不是真实前缀，parent 从 1.0.0 起
 就是 `z-msg`。
+
+**1.1.0 已发布**（`repo1` 实测 200，签名的公钥指纹 `42DC738C…F3111602D4A8C3BB`，
+`z-msg-web-1.1.0.jar` 的 sha256 与本机那次 168 例全绿构建的产物逐字节相同）。
+一行需要更正的实话：上表第一列说 `z-msg-example` **不进发布清单**，1.1.0 那次其实进了 ——
+`io.github.yuku123:z-msg-example:1.1.0` 现在在中央仓库上，删不掉（版本号不可复用）。
+原因不是配置写漏，是写错了地方：`maven.deploy.skip` 对
+central-publishing-maven-plugin 0.7.0 无效，它只认自己的 `excludeArtifacts` /
+`skipPublishing`；而后者不能用——本模块是 reactor 最后一个，bundle 的创建与上传都发生在
+最后一次 publish 执行里，在模块里写 `skipPublishing=true` 的实测结果是"zip 照样打好、
+七个该发的一个都发不出去"。所以排除写在根 pom 的 `<excludeArtifacts>`，
+从下一版起 `z-msg-example` 才真的不进清单。
 
 z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-starter-frontend/`，实测行号）：
 

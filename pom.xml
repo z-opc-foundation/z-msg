@@ -328,6 +328,14 @@
                         <extensions>true</extensions>
                         <configuration>
                             <publishingServerId>central</publishingServerId>
+                            <!-- 示例宿主不是构件，是拿来跑的；发出去只会让 io.github.yuku123
+                                 多一个 demo 坐标。1.1.0 首次发布漏了这条，
+                                 z-msg-example:1.1.0 已经在中央仓库里（bundle 内 24 个文件），
+                                 版本号不可复用 ⇒ 删不掉，只能从下一版起排除。
+                                 为什么不用模块里的 skipPublishing：见 z-msg-example/pom.xml 注释。 -->
+                            <excludeArtifacts>
+                                <excludeArtifact>z-msg-example</excludeArtifact>
+                            </excludeArtifacts>
                             <tokenAuth>true</tokenAuth>
                             <autoPublish>true</autoPublish>
                             <waitUntil>uploaded</waitUntil>

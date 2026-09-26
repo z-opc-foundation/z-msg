@@ -20,9 +20,14 @@
     </description>
 
     <properties>
-        <!-- 示例工程不参与发布 -->
+        <!-- 示例工程不参与发布。注意这条【不是】靠它做到的：
+             central-publishing-maven-plugin 0.7.0 读自己的 skipPublishing/excludeArtifacts，
+             不看 maven.deploy.skip —— 1.1.0 那次实测 z-msg-example 照样进了 bundle
+             （zip 里 24 个 z-msg-example 文件）。真正生效的配置在根 pom central profile 的
+             <excludeArtifacts> 里。留着这条只为止住普通 maven-deploy-plugin 往别的仓库发。
+             这里原先还有一条 <gpg.skip>true</gpg.skip>：central profile 的 gpg 插件写的是
+             <skip>${central.gpg.skip}</skip>，把 gpg 插件默认的 ${gpg.skip} 顶掉了，所以那行是死配置。 -->
         <maven.deploy.skip>true</maven.deploy.skip>
-        <gpg.skip>true</gpg.skip>
     </properties>
 
     <dependencies>
@@ -111,6 +116,13 @@
                          没给 repackage 绑 execution，不是靠这个 skip。 -->
                 </configuration>
             </plugin>
+            <!-- "示例不进中央仓库"的实现位置在根 pom 的 central profile：
+                 <excludeArtifacts>z-msg-example</excludeArtifacts>。
+                 不要在这里写 skipPublishing —— 本模块是 reactor 最后一个，而 central-publishing
+                 0.7.0 的 bundle 创建与上传都发生在"最后一次 publish 执行"里：
+                 实测（dryrun 把 centralBaseUrl 指向本机空端口）写了 skipPublishing 之后
+                 bundle 照样打包（z-msg-example 的 24 个文件还在 zip 里），
+                 上传却整场被跳过 ⇒ 七个该发的构件一个都发不出去。 -->
         </plugins>
     </build>
 
