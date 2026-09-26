@@ -6,8 +6,10 @@ import com.zifang.z.msg.channels.http.SimpleHttpClient;
 import com.zifang.z.msg.channels.provider.AliyunSmsSender;
 import com.zifang.z.msg.channels.provider.DingTalkRobotSender;
 import com.zifang.z.msg.channels.provider.FeishuRobotSender;
+import com.zifang.z.msg.channels.provider.JPushSender;
 import com.zifang.z.msg.channels.provider.RecordingMockSender;
 import com.zifang.z.msg.channels.provider.SlackBotSender;
+import com.zifang.z.msg.channels.provider.TencentSmsSender;
 import com.zifang.z.msg.channels.provider.WeixinMpSender;
 import com.zifang.z.msg.channels.provider.WecomRobotSender;
 import org.junit.jupiter.api.Test;
@@ -57,9 +59,19 @@ class ChannelsAutoConfigurationTest {
             assertNotNull(ctx.getBean(SlackBotSender.class));
             assertNotNull(ctx.getBean(WeixinMpSender.class));
             assertNotNull(ctx.getBean(AliyunSmsSender.class));
+            assertNotNull(ctx.getBean(TencentSmsSender.class));
+            assertNotNull(ctx.getBean(JPushSender.class));
             assertFalse(ctx.getBean(DingTalkRobotSender.class).ready());
             assertFalse(ctx.getBean(SlackBotSender.class).ready());
             assertFalse(ctx.getBean(AliyunSmsSender.class).ready());
+            assertFalse(ctx.getBean(TencentSmsSender.class).ready());
+            assertFalse(ctx.getBean(JPushSender.class).ready());
+            // 同属 SMS 的两个 sender 共存，靠 provider 名区分（pick() 按 "CHANNEL|provider" 索引）
+            AliyunSmsSender aliyun = ctx.getBean(AliyunSmsSender.class);
+            TencentSmsSender tencent = ctx.getBean(TencentSmsSender.class);
+            assertEquals(aliyun.channel(), tencent.channel());
+            assertEquals("aliyun", aliyun.provider());
+            assertEquals("tencent", tencent.provider());
             // 录制 mock：provider 名 mock、isMock=true（ChannelSender 契约第二条）
             RecordingMockSender mock = ctx.getBean("recordingMockDingTalk", RecordingMockSender.class);
             assertTrue(mock.isMock());
@@ -77,6 +89,9 @@ class ChannelsAutoConfigurationTest {
                 "z-msg.channel.sms.access-key-secret=AKSEC",
                 "z-msg.channel.im-weixin-mp.app-id=wxapp",
                 "z-msg.channel.im-weixin-mp.app-secret=wxsec",
+                "z-msg.channel.sms.sdk-app-id=1400009100",
+                "z-msg.channel.push-jpush.app-key=jpush-app-key",
+                "z-msg.channel.push-jpush.master-secret=jpush-master-secret",
                 "z-msg.channel.sms.connect-timeout-ms=1234",
                 "z-msg.channel.sms.read-timeout-ms=2345"
         ).run(ctx -> {
@@ -84,9 +99,15 @@ class ChannelsAutoConfigurationTest {
             assertTrue(ctx.getBean(SlackBotSender.class).ready());
             assertTrue(ctx.getBean(AliyunSmsSender.class).ready());
             assertTrue(ctx.getBean(WeixinMpSender.class).ready());
+            assertTrue(ctx.getBean(TencentSmsSender.class).ready(),
+                    "sms.sdk-app-id + access-key-id/secret 齐了，腾讯云这条就该 ready");
+            assertTrue(ctx.getBean(JPushSender.class).ready());
             ChannelsProperties props = ctx.getBean(ChannelsProperties.class);
             assertEquals("tok-kebab", props.channel("IM_DINGTALK").getToken());
             assertEquals("sec-kebab", props.channel("im_dingtalk").getSecret());
+            assertEquals("1400009100", props.channel("SMS").getSdkAppId());
+            assertEquals("jpush-app-key", props.channel("PUSH_JPUSH").getAppKey());
+            assertEquals("jpush-master-secret", props.channel("push_jpush").getMasterSecret());
             assertEquals(1234, props.channel("SMS").connectTimeoutMsOrDefault());
             assertEquals(2345, props.channel("SMS").readTimeoutMsOrDefault());
         });

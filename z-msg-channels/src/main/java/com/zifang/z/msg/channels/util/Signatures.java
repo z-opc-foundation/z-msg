@@ -45,6 +45,11 @@ public final class Signatures {
         }
     }
 
+    /** 便捷支：被签数据按 UTF-8 取字节（TC3 的派生密钥链每步都是"上一步的字节 + 下一段文本"）。 */
+    private static byte[] hmac(String algorithm, byte[] key, String data) {
+        return hmac(algorithm, key, data.getBytes(StandardCharsets.UTF_8));
+    }
+
     /**
      * 钉钉规范：urlencode(Base64(HmacSHA256(key=secret, data=timestamp + "\n" + secret)))。
      * 返回已百分号编码、可直接拼进 query 的串。

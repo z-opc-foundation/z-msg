@@ -7,7 +7,9 @@ import com.zifang.z.msg.channels.config.ChannelsProperties;
 import com.zifang.z.msg.channels.http.SimpleHttpClient;
 import com.zifang.z.msg.channels.provider.AliyunSmsSender;
 import com.zifang.z.msg.channels.provider.DingTalkRobotSender;
+import com.zifang.z.msg.channels.provider.JPushSender;
 import com.zifang.z.msg.channels.provider.SlackBotSender;
+import com.zifang.z.msg.channels.provider.TencentSmsSender;
 import com.zifang.z.msg.channels.provider.WeixinMpSender;
 import com.zifang.z.msg.channels.support.LogCapture;
 import com.zifang.z.msg.channels.support.StubServer;
@@ -36,6 +38,10 @@ class CredentialsNotLoggedTest {
     private static final String SLACK_TOKEN = "xoxb-SuperSecret789";
     private static final String WX_SECRET = "wxSuperSecret000";
     private static final String AK_SECRET = "aliyunSuperSecret111";
+    private static final String TX_SECRET_ID = "AKID" + "zSuperSecretId000";
+    private static final String TX_SECRET_KEY = "Gu5t9xSuperSecretKey111";
+    private static final String JP_APP_KEY = "jpushAppKeySuper333";
+    private static final String JP_MASTER_SECRET = "jpushMasterSuper444";
 
     private StubServer stub;
     private ChannelsProperties props;
@@ -170,5 +176,61 @@ class CredentialsNotLoggedTest {
         String sig = req.query().get("Signature");
         assertTrue(sig.length() > 10);
         assertFalse(text.contains(sig.substring(5, sig.length() - 5)), "签名派生值不得进日志");
+    }
+
+    @Test
+    void tencentSecretPairAndDerivedSignatureAreNotLoggedButTheHeaderIsOnTheWire() {
+        ChannelsProperties.ChannelCfg cfg = new ChannelsProperties.ChannelCfg();
+        cfg.setBaseUrl(stub.baseUrl());
+        cfg.setAccessKeyId(TX_SECRET_ID);
+        cfg.setAccessKeySecret(TX_SECRET_KEY);
+        cfg.setSdkAppId("1400009100");
+        cfg.setSignName("z-opc");
+        cfg.setTemplateCode("1648");
+        props.put(Channels.SMS, cfg);
+        stub.enqueue("/", 500, "boom");
+
+        TencentSmsSender sender = new TencentSmsSender(props, new SimpleHttpClient(), () -> "1551113065");
+        Message m = msg(Channels.SMS);
+        m.setReceiver("13800000000");
+        m.getParams().put("code", "1234");
+        assertFalse(sender.send(m).isSuccess());
+
+        // 猎物：Authorization 真上了线，SecretKey 只以派生签名的形式出现
+        String auth = stub.last("/").header("authorization");
+        assertTrue(auth != null && auth.startsWith("TC3-HMAC-SHA256 Credential="), "实际=" + auth);
+        assertTrue(auth.contains(TX_SECRET_ID + "/"), "SecretId 必须在 Authorization 里");
+        String sig = auth.substring(auth.lastIndexOf("Signature=") + "Signature=".length());
+        assertEquals(64, sig.length(), "TC3 签名是 64 位小写十六进制，实际=" + sig);
+
+        String text = logs.text();
+        assertFalse(text.isEmpty());
+        assertFalse(text.contains(TX_SECRET_KEY), "SecretKey 不得进日志");
+        assertFalse(text.contains(TX_SECRET_ID), "SecretId 是凭据的另一半，同样不得进日志");
+        assertFalse(text.contains(sig), "派生签名不得进日志");
+    }
+
+    @Test
+    void jpushBasicCredentialIsNotLoggedButIsOnTheWire() {
+        ChannelsProperties.ChannelCfg cfg = new ChannelsProperties.ChannelCfg();
+        cfg.setBaseUrl(stub.baseUrl());
+        cfg.setAppKey(JP_APP_KEY);
+        cfg.setMasterSecret(JP_MASTER_SECRET);
+        props.put(Channels.PUSH_JPUSH, cfg);
+        stub.enqueue("/v3/push", 500, "boom");
+
+        JPushSender sender = new JPushSender(props, new SimpleHttpClient());
+        assertFalse(sender.send(msg(Channels.PUSH_JPUSH)).isSuccess());
+
+        String encoded = java.util.Base64.getEncoder().encodeToString(
+                (JP_APP_KEY + ":" + JP_MASTER_SECRET).getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        assertEquals("Basic " + encoded, stub.last("/v3/push").header("authorization"),
+                "猎物：AppKey+MasterSecret 整段真进了 header");
+
+        String text = logs.text();
+        assertFalse(text.isEmpty());
+        assertFalse(text.contains(JP_MASTER_SECRET), "Master Secret 不得进日志");
+        assertFalse(text.contains(encoded), "Base64 只是编码不是加密，密文同样不得进日志");
+        assertFalse(text.contains(JP_APP_KEY), "App Key 不得进日志");
     }
 }

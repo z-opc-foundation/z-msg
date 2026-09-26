@@ -56,25 +56,28 @@ parent 是 pom-only，它的 `.jar` 本来就该 404）：
 | WebSocket 接入（握手鉴权、订阅、多端、心跳、背压上限） | `z-msg-ws` | 1 个 `MsgPrincipalResolver` bean |
 | 五分钟搭出聊天室 | `z-msg-ws` + 1 个授权策略 | 一个 `TopicAuthorizationPolicy` |
 | 微信式 IM（会话/成员/seq/已读回执/未读汇总/离线增量） | `z-msg-im` | 0 行（引 jar 即自动装配） |
-| 对接企微 / 钉钉 / 飞书 / Slack / 公众号 / 阿里云短信 | `z-msg-channels` | 0 行（一段 yml） |
+| 对接企微 / 钉钉 / 飞书 / Slack / 公众号 / 阿里云与腾讯云短信 / 极光推送 | `z-msg-channels` | 0 行（一段 yml） |
 
 ---
 
 ## 模块结构
 
-8 个 Maven 模块（`${revision}` + flatten，parent 自给自足）；测试数取自 `mvn -B -o clean verify`
-与发布那一场 `mvn -B clean deploy -Pcentral`，两边都是**总计 177 例、0 失败 0 跳过**
-（core 26 / channels 57 / web 13 / ws 19 / im 55 / example 7）。发布那一遍**没有** `-DskipTests`：
-上传出去的字节就是这 177 例跑绿的那批 jar（三方 sha256 对账见 §14）。1.1.0 发布件是 168 例，
+8 个 Maven 模块（`${revision}` + flatten，parent 自给自足）。**两把尺要分开读**：
+当前工作树 `mvn -B -o clean verify` = **总计 202 例、0 失败 0 跳过**
+（core 26 / channels 82 / web 13 / ws 19 / im 55 / example 7）；
+而 **repo1 上已发布的 1.2.0 那棵树是 177 例**（channels 57，发布那一场 `mvn -B clean deploy -Pcentral`
+**没带** `-DskipTests`，上传出去的字节就是那 177 例跑绿的那批 jar，三方 sha256 对账见 §14）。
+两者差的 25 例全在 channels：腾讯云 SMS（10）+ 极光推送（10）+ TC3/Basic 固定向量与凭据不上日志（5），
+**这一批还没发布，所以对外仍是 177 的口径**。1.1.0 发布件是 168 例，
 多出来的 6 例是票的一次性消费那一轮（5 支 core + 1 支真握手 ws E2E），3 例是增量同步判定量那一轮（全在 im 服务层）。
 
 | 模块 | 职责 | 测试 |
 |---|---|---|
 | `z-msg-api` | 纯 SPI 与常量：`MessageGateway` / `Message` / `Channels` / `RealtimePublisher` / `TopicAuthorizationPolicy`，零实现零 Spring | — |
-| `z-msg-core` | 默认 provider（mock / SMTP）、`ChannelRouter`、限流、重试、模板、投递日志、批量、站内信读写侧、7 张表的 DDL | 21 |
-| `z-msg-channels` | 真实外部渠道 provider：钉钉/企微/飞书/Slack 群机器人、公众号模板消息、阿里云短信、录制 mock | 57 |
+| `z-msg-core` | 默认 provider（mock / SMTP）、`ChannelRouter`、限流、重试、模板、投递日志、批量、站内信读写侧、7 张表的 DDL | 26 |
+| `z-msg-channels` | 真实外部渠道 provider：钉钉/企微/飞书/Slack 群机器人、公众号模板消息、阿里云与腾讯云短信、极光推送、录制 mock | 82 |
 | `z-msg-web` | REST Controller + `MsgAutoConfiguration`（`spring.factories`）+ 身份接缝 + 管理面闸门 `AdminEndpointGate` | 13 |
-| `z-msg-ws` | WebSocket 实时接入层：短期票握手、帧协议、topic 订阅、三态授权、在线注册表 | 18 |
+| `z-msg-ws` | WebSocket 实时接入层：短期票握手、帧协议、topic 订阅、三态授权、在线注册表 | 19 |
 | `z-msg-im` | 会话/成员/消息/已读回执域，seq 分配与增量同步，自带 4 张表与 REST | 55 |
 | `z-msg-example` | 能跑的大厅聊天室 + 站内信宿主（**1.2.0 起真的不进发布清单**：repo1 实测这一件 404、其余七件 200，见 §14），顺带承载端点普查 | 7 |
 
@@ -310,21 +313,23 @@ for (;;) {
 | channel | provider | 实现类 | 状态 |
 |---|---|---|---|
 | `SMS` | `aliyun` | `AliyunSmsSender` | ✅ RPC 签名向量离线钉死 |
+| `SMS` | `tencent` | `TencentSmsSender` | ✅ TC3-HMAC-SHA256，签名覆盖"线上真发的那几个字节" |
 | `EMAIL` | `smtp` | `SmtpEmailSender`（core） | ✅ |
 | `IN_APP` | `db` | `InAppChannel`（core） | ✅ |
 | `WEBHOOK` | `http` | `WebhookSender` | ✅ |
 | `IM_WECOM` / `IM_DINGTALK` / `IM_FEISHU` | `robot` | 群机器人三家 | ✅ |
 | `IM_SLACK` | `bot` | `SlackBotSender` | ✅ |
 | `IM_WEIXIN_MP` | `mp` | `WeixinMpSender` | ✅ token 缓存 + 过期重取 |
-| `IM_WEIXIN_MINI` / `PUSH_FCM` / `PUSH_APNS` / `PUSH_WEB` / `PUSH_JPUSH` / `REALTIME` | — | **常量有、厂商 sender 无** | ⚠️ 落到 `MockFallbackSender` |
+| `PUSH_JPUSH` | `jpush` | `JPushSender` | ✅ v3 push，Basic 认证 |
+| `IM_WEIXIN_MINI` / `PUSH_FCM` / `PUSH_APNS` / `PUSH_WEB` / `REALTIME` | — | **常量有、厂商 sender 无** | ⚠️ 落到 `MockFallbackSender` |
 
 最后那行是这个表存在的原因：`GET /api/msg/channel/list` 每条通道返回
 `real` / `ready` / `enabled` / `providers` / `activeProvider` / `configuredProvider` /
 `fallbackChannels`，`GET /api/msg/channel/detail?channel=` 再补 `selected`（选中的实现类）与
 `selectedIsMock`。**假成功在自省接口里是看得见的**（`real:false`、`selectedIsMock:true`），
 `channelIntrospectionLabelsMockProvidersHonestly` 钉着这条。
-腾讯云、SendGrid、极光的形状照 `AliyunSmsSender` + 测试模板补即可；
-各家的未支持项与待核对点（含飞书签名形状）逐条列在
+SendGrid、FCM/APNs 的形状照 `AliyunSmsSender` / `TencentSmsSender` + 测试模板补即可；
+各家的未支持项与待核对点（含飞书签名形状、极光透传消息）逐条列在
 [`z-msg-channels/README.md`](z-msg-channels/README.md)。
 
 一个业务事件同时投多通道，走 `fanOut`（偏好过滤 + 静默时段 + 限流 + 模板渲染 + 重试 + 投递日志）：
@@ -441,7 +446,7 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `enabled` | `true` | 总开关，关掉全部撤回 |
-| `sms.provider` | `mock` | `aliyun` / `mock` |
+| `sms.provider` | `mock` | `aliyun` / `tencent` / `mock` |
 | `sms.default-sign` | `【z-opc】` | |
 | `email.provider` | `mock` | `smtp` / `mock` |
 | `email.default-from` | `no-reply@z-opc.com` | |
@@ -478,8 +483,9 @@ size, page, peerUserId, tenantCode, convType, memberUserIds, title, avatar, user
 `seq-cas-backoff-ms=1`、`publish-realtime=true`、`publish-read-receipt=true`、
 `user-side-push=true`、`user-side-push-max-members=200`。
 
-`z-msg.channel.<CH>.*` 的 17 个厂商键（`token` / `secret` / `app-id` / `app-secret` / `access-key-id`
-/ `access-key-secret` / `sign-name` / `template-code` / `region` / `signature-version` / `slack-channel`
+`z-msg.channel.<CH>.*` 的 20 个厂商键（`token` / `secret` / `app-id` / `app-secret` / `access-key-id`
+/ `access-key-secret` / `sdk-app-id` / `app-key` / `master-secret` / `sign-name` / `template-code`
+/ `region` / `signature-version` / `slack-channel`
 / `url` / `base-url` / `connect-timeout-ms` / `read-timeout-ms` / `retries` / `mock`，另加 `provider`
 这个选择位）逐个"在哪被读"见 [`z-msg-channels/README.md`](z-msg-channels/README.md)。
 
@@ -498,7 +504,7 @@ MySQL 与 H2 各一份，同源由 `SchemaParityTest` 真跑执行验证：
 
 ```bash
 cd z-msg
-mvn -B -o clean verify                        # 8 模块、177 例（1.2.0 发布件同口径；1.1.0 是 168 例）
+mvn -B -o clean verify                        # 当前树 8 模块、202 例（1.2.0 发布件那棵树 177 例；1.1.0 是 168 例）
 mvn -B -o -DskipTests install                 # 装进 ~/.m2，一次即可
 mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 ```
@@ -648,7 +654,8 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
   那个号就永久空着。写侧的 seq 回收仍然待议（要做就得连"让回去的号可能已经被更晚的写占走"一起想清楚）；
 - provider 出网白名单（SSRF 面：`url`/`base-url` 目前由配置决定，scheme 白名单已有，host 未限）；
 - 摘要合并窗口与时区感知的静默时段；
-- 腾讯云 SMS / SendGrid / 极光 / FCM-APNs 的 sender 实现。
+- SendGrid / FCM-APNs 的 sender 实现（腾讯云 SMS 与极光推送已在树上：`TencentSmsSender` / `JPushSender`，
+  但**只有离线 stub 测试与离线固定向量背书，没真机投过一条**，且尚未发布）。
 
 ---
 
