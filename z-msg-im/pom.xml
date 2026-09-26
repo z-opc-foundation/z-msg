@@ -58,6 +58,15 @@
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-msg-core</artifactId>
         </dependency>
+        <!-- 为什么是 compile 而不是 test：controller 的身份只能来自 MsgPrincipalResolver
+             （服务端从凭证里解出 userId，绝不接受请求里自报的），而这个接缝在 z-msg-web 里。
+             没有它就只能"只给领域层、REST 让宿主自己写"。代价与替代方案见
+             MsgImAutoConfiguration 的类注释（"退避条件为什么不是 @ConditionalOnBean"那两段）。
+             另外：sqlSessionFactoryMsg 这个 bean 也是 web 建的，im 的 @MapperScan 按名字引用它。 -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-web</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-util-core</artifactId>
@@ -114,6 +123,29 @@
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <scope>test</scope>
+        </dependency>
+        <!-- ============ test：真接线 ============
+             IM 的集成测试必须连着真 WebSocket 端点跑：非成员订不到 room: 这条守卫
+             只有"真起两条 socket"才算验过，mock 一个 publisher 出来是自我证明。
+             这两个依赖都是 test 作用域：主代码不 import 任何 z-msg-ws 的类
+             （实时下发只走 z-msg-api 的 RealtimePublisher 接缝），
+             所以宿主不引 ws 时 im 照样能编译、能落库，只是没有实时帧。 -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-msg-ws</artifactId>
+            <version>${project.version}</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
     </dependencies>
 
