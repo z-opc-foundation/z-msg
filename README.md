@@ -39,7 +39,8 @@ parent 是 pom-only，它的 `.jar` 本来就该 404）：
 > ⚠️ **`repo1` 上最新仍是 1.2.0，而主干已经走到它前面了。** 有四处改动只在 `origin/main` 上、
 > 不在任何发布构件里：`op=auth` 带内换票（§4）、`ready` 的 `ops`/`limits` 自描述（§4）、
 > 腾讯云短信与极光推送两个 sender（§7，且只经过离线固定向量与 stub，没向厂商真投过一条）、
-> **IM 的 id 线格式从数字改成字符串**（§6，这一条是**破坏性**变更，别指望把它塞回 1.2.0）。
+> **IM 的线格式**（§6：id 从数字改成字符串，`kind=chat` 帧的 `createdTime` 从 epoch 毫秒改成
+> 与 REST 同形的 ISO 字符串。这一条是**破坏性**变更，别指望把它塞回 1.2.0）。
 > **"主干代码，尚未发布"这一档又回来了**（上一段那个结论只对 1.2.0 那两件事成立）；
 > 本文点到这四处的段落都各自带着这句限定，别看代码时以为线上就有。
 
@@ -299,6 +300,7 @@ z-msg:
 | 服务端署名 | 发言落库时 `sender_user_id` 与 `seq` 都由服务端写——这是它和"大厅自报 from"的区别 |
 | 别人订不到你的房间 | `ImTopicAuthorizationPolicy` 按成员表判 `room:`，非成员 `FALSE`，且**不影响**大厅放行 |
 | 前端拿到的 id 是准的 | 会话/消息/用户引用的 id 线上一律**字符串**（REST 与实时帧同一条规则）——19 位雪花出成 JSON 数字，浏览器 `JSON.parse` 会舍掉末位 |
+| 实时那条与补拉那条是同一个气泡 | 帧 payload 的 `createdTime` 与 REST 那一行**同形**（ISO 字符串、截到秒），前端不必为同一个字段准备两套比较；去重键仍按 `conversationId + seq` |
 
 **这条形状是主干改动，1.2.0 及以前出的是数字**，属破坏性线格式变更，不能塞回已发布的构件里。
 它的理由不是"好看"：id 一旦被舍入，前端拿舍过的值去拼 `room:<id>` 或回填 `message/send`，
@@ -306,6 +308,16 @@ z-msg:
 症状与权限配错完全一样。钉住的是 `ImSpringTestSupport#idOf`（判形状）与
 `ImRestApiTest#conversationIdSurvivesAJavaScriptStyleRoundTrip`（判"拿到什么就回填什么"这条
 前端自然路径真走得通），细节在 `_doc/001_WS_PROTOCOL.md` §2。`seq` 一类游标仍是数字。
+
+同一段里还有第二条形状决定：**帧的 `createdTime` 也收成字符串**，和 REST 那一行、站内信帧一致。
+原先它出 epoch 毫秒，于是同一条消息"实时收到的一份"与"补拉回来的一份"时间对不上，
+而 `MsgJson` 那个私有 mapper 又**没关** `WRITE_DATES_AS_TIMESTAMPS`、jsr310 靠宿主带
+（`findAndRegisterModules` 探测式注册）——把裸 `LocalDateTime` 丢进 map 的话，线格式就由宿主的
+依赖表决定了，所以服务端自己 `toString()`；截到秒是因为 MySQL 的 `created_time TIMESTAMP` 只存整秒，
+而帧里那份是 insert 之前的内存值。外层帧的 `ts` 仍是 epoch 毫秒（传输层的绝对时刻，不是一回事）。
+比的时候按**"两边各截到秒后相等"**：MySQL 读回来是整秒，与帧逐字节相同；H2 的 `TIMESTAMP` 存到微秒，
+读回来仍带 `.966957` 这样的尾巴（站内信那一层干脆没截——它的 `created_time` 参与
+`ORDER BY pinned DESC, created_time DESC`，截掉会把同秒两条压成并列）。这条口径就是守卫本身。
 
 标注的位置有 6 个类，不是 1 个：4 张表的实体（`ImConversationDO` / `ImMemberDO` / `ImMessageDO` /
 `ImReadReceiptDO`）各 3 个字段、会话视图 `ImConversationView` 3 个、未读汇总 `ImUnread` 1 个，
@@ -627,7 +639,7 @@ limits 里的 topic 上限写死成默认 64 ⇒ `limitsInReadyAreTheSameNumbers
 与注入前逐字节一致（`md5 970a203b…`），随后 `mvn -B -o clean verify` 全量 **222 例 / 0 失败 / 0 跳过**
 （那是那一轮的树；当前工作树 224，口径见 §模块结构）。
 
-"id 线格式"这一轮 3 支，全部红在具名断言上（同样 `cp` 副本 + `md5` 逐字节还原后复跑全绿）：
+"id 线格式 + 帧的时间形状"这一轮 5 支，全部红在具名断言上（同样 `cp` 副本 + `md5` 逐字节还原后复跑全绿）：
 摘掉 `ImConversationDO` 上的 `@JsonSerialize(using = ToStringSerializer.class)` ⇒ im 模块 3 条红
 （`ImRestApiTest#selfReportedIdentityInBodyIsIgnoredNotHonoredAndNotFatal`、
 `#conversationAndMessageFlowOverHttp`、`#conversationIdSurvivesAJavaScriptStyleRoundTrip` 里那句
@@ -641,6 +653,17 @@ limits 里的 topic 上限写死成默认 64 ⇒ `limitsInReadyAreTheSameNumbers
 `ImReadService#unreadSummary` 用 `ImUnread.of(...)` 现装的另一份 DTO，`conversationId` 从
 `ImConversationView` 逐字段抄过来——实体上的注解结构上管不到这个新对象，
 所以这条红只能由 `unread/summary` 的线上形状来钉。
+
+另两支打的是同一条帧载荷上的**时间形状**（原先 `createdTime` 出 epoch 毫秒，而 REST 那一行
+和站内信帧出的都是 ISO 字符串，同一条消息有两套值）：把那行换回
+`when.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()` ⇒ 1 条红，红在
+`assertTrue(payload.get("createdTime") instanceof String)`，消息直接把退回的数字印出来
+（`不能是 epoch 数字: 1790444494286`）；摘掉 `truncatedTo(ChronoUnit.SECONDS)` ⇒ 1 条红，
+红在等值那句（`expected: <2026-09-27T01:41:46> but was: <2026-09-27T01:41:46.630615>`，
+H2 把微秒存住了所以猎物理所当然）。两支都红在
+`ImRealtimeTwoSocketTest#memberSocketOnRoomTopicReallyReceivesWhatAnotherMemberSent`，
+`Tests run: 6, Failures: 1`。第二支的牙依赖亚秒非 0（本机实测 `…T01:41:46.630615`）：
+若某次 `LocalDateTime.now()` 正好落在整秒它会 SURVIVED，复跑一次再判，别急着改断言。
 
 ---
 
@@ -734,9 +757,14 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
 字段层面共 16 个注解位（`id` / `conversationId` / `senderUserId` / `ownerUserId` / `lastMsgId` / `userId`）
 加 2 处手工拼的帧载荷，**不动**的是 `seq` / `lastReadSeq` / `myLastReadSeq` / `clearedSeq` /
 `myClearedSeq` / `replyToSeq` / `unreadCount` / `conversationCount` / `total` / `headSeq` /
-`nextSinceSeq` / `minVisibleSeq` / `createdTime`。
+`nextSinceSeq` / `minVisibleSeq`。
+上面那 18/11/7 的计数只算 REST；实时帧上还有一条同批的形状对齐不在里面：
+`kind=chat` 的 `createdTime` 原先出 epoch 毫秒，现在出与 REST 那一行、站内信帧**同一格式**的
+ISO 字符串（服务端侧截到秒；MySQL 读回来是整秒所以逐字节相等，H2 的 `TIMESTAMP` 存微秒所以
+比较口径是"两边各截到秒后相等"，见 §6）。**REST 侧 18 条端点的计数不受影响**（REST 一直是字符串，动的只有帧）。
 JS 客户端的迁移动作只有一句：把这些 id 当字符串用，别再 `Number()` 一次——
 `Number("2103885891501236225")` 依旧会舍成 `…200`（这条实测过），形状改了而问题没改。
+帧里的时间现在直接 `String` 用即可，别再 `new Number(...)`；要绝对时刻认外层 `ts`（仍是数字）。
 
 ## 15. 设计参考（GitHub 同类项目）
 

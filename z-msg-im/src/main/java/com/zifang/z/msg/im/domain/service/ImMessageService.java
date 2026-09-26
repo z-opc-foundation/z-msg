@@ -22,7 +22,7 @@ import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
@@ -327,8 +327,7 @@ public class ImMessageService {
     /**
      * 帧的 payload，形状见 {@code _doc/001_WS_PROTOCOL.md} §2：外层帧的
      * {@code op=message / kind=chat / topic / seq / ts} 由 {@code RealtimeMessage} 负责，
-     * 这里只给 payload 本体。时间是 epoch 毫秒而不是 LocalDateTime ——
-     * 对端不必为它配 JavaTime 模块。
+     * 这里只给 payload 本体。
      * <p>
      * 三个 id 一律出字符串：雪花是 19 位十进制，而 JS 的 Number 只有 53 bit 精度
      * （安全上界 9007199254740991，16 位），浏览器 {@code JSON.parse} 会把
@@ -336,6 +335,25 @@ public class ImMessageService {
      * 拼 {@code room:<id>} 或回传 {@code /message/send}，症状是"刚建好的会话查不到"
      * （403 无权访问会话），而它在服务端一侧从未存在过——最难查的那类 bug。
      * seq / lastReadSeq 留在数字里：它们是会话内从 1 起的游标，客户端要拿它做算术。
+     * <p>
+     * {@code createdTime} 出 ISO 字符串，与 REST 那一行的 {@code ImMessageDO.createdTime}、
+     * 站内信帧（{@code InAppChannel}）同一格式 —— 同一条消息在"实时帧"和"补拉历史"里拿到的
+     * 时间必须能用同一套代码解析，不能一边是 {@code 1790443048257} 一边是
+     * {@code "2026-09-27T01:23:45"}（前端就得为同一个字段准备两套比较与两套格式化）。
+     * <p>
+     * 为什么不直接把 {@link LocalDateTime} 塞进 map 交给 Jackson：payload 走的是
+     * {@code MsgJson} 那个私有 mapper，它没关 {@code WRITE_DATES_AS_TIMESTAMPS}，而 jsr310
+     * 模块是宿主带进来的（{@code findAndRegisterModules} 探测式注册）。也就是说同一份字节在
+     * 两种宿主 classpath 上会分别写成 {@code [2026,9,27,1,23,45]} 数组和 ISO 字符串 ——
+     * 线格式由宿主的依赖表决定，这是最没人认领的那类缺陷。所以这里自己 {@code toString()}。
+     * <p>
+     * 截到秒：DDL 里 {@code created_time TIMESTAMP} 在 MySQL 只存整秒，H2 存到微秒，
+     * 而帧里这一份是 insert 之前那个内存值（带亚秒）。不截的话"帧里的时间"和
+     * "从库里读回来的同一条"在 MySQL 上永远差一段。注意截了也不表示两边逐字节相同——
+     * H2 读回来仍带 {@code .966957} 这样的尾巴，所以两边比较的口径是
+     * <b>"各截到秒后相等"</b>，{@code ImRealtimeTwoSocketTest} 的守卫就按这个口径写。
+     * （站内信那一层不截：它的 {@code created_time} 参与 {@code ORDER BY pinned DESC,
+     * created_time DESC}，截掉会把同一秒内的两条压成并列。）
      */
     private Map<String, Object> payloadOf(ImMessageDO message, LocalDateTime when) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
@@ -354,8 +372,8 @@ public class ImMessageService {
         if (message.getReplyToSeq() != null) {
             payload.put("replyToSeq", message.getReplyToSeq());
         }
-        payload.put("createdTime", when == null ? System.currentTimeMillis()
-                : when.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli());
+        payload.put("createdTime", (when == null ? LocalDateTime.now() : when)
+                .truncatedTo(ChronoUnit.SECONDS).toString());
         return payload;
     }
 

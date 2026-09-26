@@ -4,6 +4,7 @@ import com.zifang.z.msg.api.RealtimeMessage;
 import com.zifang.z.msg.api.RealtimePublisher;
 import com.zifang.z.msg.api.RealtimeTopics;
 import com.zifang.z.msg.core.json.MsgJson;
+import com.zifang.z.msg.im.domain.entity.ImMessageDO;
 import com.zifang.z.msg.im.domain.model.ImConvTypes;
 import com.zifang.z.msg.ws.config.WsProperties;
 import com.zifang.z.msg.ws.session.WsSessionRegistry;
@@ -18,6 +19,8 @@ import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.client.standard.StandardWebSocketClient;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -99,7 +102,16 @@ public class ImRealtimeTwoSocketTest extends ImSpringTestSupport {
         assertEquals(A, idOf(payload.get("senderUserId")));
         assertEquals(sent.id, idOf(payload.get("id")));
         assertEquals("TEXT", payload.get("msgType"));
-        assertNotNull(payload.get("createdTime"), "时间要带，且是 epoch 毫秒而不是 LocalDateTime 结构");
+        assertNotNull(payload.get("createdTime"), "时间要带");
+        assertTrue(payload.get("createdTime") instanceof String,
+                "createdTime 要和 REST 那一行、站内信帧同形（ISO 字符串），不能是 epoch 数字: "
+                        + payload.get("createdTime"));
+        ImMessageDO stored = messageService.history(conv, A, 0L, 10).get(0);
+        assertEquals(sent.seq, stored.getSeq().longValue(), "补拉回来的就该是刚发的那一条");
+        assertEquals(stored.getCreatedTime().truncatedTo(ChronoUnit.SECONDS),
+                LocalDateTime.parse((String) payload.get("createdTime")),
+                "帧里的时间必须等于库里那一行（截到秒）：MySQL 的 created_time 只存整秒，"
+                        + "不截的话同一消息在帧里和在历史里对不上，前端就得为同一个字段准备两套解析");
 
         // 订阅者自己也收得到自己发的（多端一致：同一账号的另一台设备要看到刚敲出去的字）
         Recorder a = connect(A);

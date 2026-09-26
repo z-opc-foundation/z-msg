@@ -165,10 +165,29 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
 | `seq` | 数字 | 会话内从 1 起的游标，客户端要拿它做加减与比较 |
 | `msgType`、`content` | 字符串 | `TEXT` / `IMAGE` / `FILE` / `AUDIO` / `SYS` |
 | `clientMsgId`、`atUserIds`、`replyToSeq` | 有值才出现 | `atUserIds` 是升序逗号分隔的**字符串**，不是 JSON 数组 |
-| `createdTime` | 数字 | epoch 毫秒 |
+| `createdTime` | **字符串** | ISO 本地时间、**截到秒**（`2026-09-27T01:23:45`），与 REST 那一行、站内信帧同一格式 |
 
 `kind=read`（`publishReadFrame`，走 `room:`）：`conversationId`、`userId` 字符串，
 `lastReadSeq` 数字。
+
+> **别把外层帧的 `ts` 和 payload 的 `createdTime` 当成一回事**：`ts` 是这条帧被服务端投递出去的
+> 时刻，走 `System.currentTimeMillis()`，是**数字**、绝对时间；`createdTime` 是消息落库的时间，
+> 是 `LocalDateTime` 的**墙上时间**字符串、不带时区。跨时区部署时它按服务端本地读，
+> 要绝对时刻就认 `ts`。这两样同一条消息里都有，前端去重/排序时别把它们混成一个量。
+>
+> **为什么 `createdTime` 不直接放 `LocalDateTime` 让 Jackson 写**：payload 走的是 `MsgJson`
+> 那个私有 mapper，它没关 `WRITE_DATES_AS_TIMESTAMPS`，而 jsr310 模块是宿主带进来的
+> （`findAndRegisterModules` 探测式注册）。同一份 z-msg 字节在两种宿主 classpath 上会分别写成
+> `[2026,9,27,1,23,45]` 数组和 ISO 字符串——线格式由宿主的依赖表决定，这是最没人认领的那类缺陷，
+> 所以服务端自己 `toString()`。**为什么截到秒**：DDL 的 `created_time TIMESTAMP` 在 MySQL 只存整秒，
+> 而帧里那份是 insert 之前的内存值（带亚秒）；不截的话同一消息在帧里和在 `/history` 里永远差一段，
+> 前端就得为同一个字段准备两套解析与两套格式化。**截了也不等于两边逐字节一样**：MySQL 读回来就是整秒（对得上），
+> H2 的 `TIMESTAMP` 是微秒，读回来仍带 `.966957` 这样的尾巴——所以比较的口径是
+> **"两边各截到秒后相等"**，`ImRealtimeTwoSocketTest` 就是这么写的。站内信那一层
+> （`InAppChannel`）也出 ISO 字符串，但它**没有截**：它的 `created_time` 参与
+> `ORDER BY pinned DESC, created_time DESC` 的排序，截掉会把同一秒内的两条压成并列。
+> 整点那一分钟 `toString()` 会省掉秒（`…T01:23`），REST 那一层同规则，
+> 两边仍逐字节一致，`LocalDateTime.parse` 两种长度都吃。
 
 **为什么 id 出字符串而不是数字**：会话/消息 id 是 19 位十进制雪花，而 JS 的 `Number`
 只有 53 bit（安全上界 `9007199254740991`，16 位）。浏览器 `JSON.parse` 会当场把
@@ -190,11 +209,16 @@ REST 侧同理：`@JsonSerialize(using = ToStringSerializer.class)` 只钉在 id
 `conversationId + seq` 去重**，否则会画两个气泡；`z-msg-example` 的私聊面板就是这么做的。
 
 > **这条形状是主干改动，不在任何已发布构件里**：1.2.0 及以前 IM 的 id 在 REST 与实时帧上
-> 都是数字。改动破坏线格式（对按数字读的客户端），因此不能反向移植进 1.2.0；
-> 钉住它的是 `ImSpringTestSupport#idOf`（判"必须是字符串"）与
+> 都是数字，而 `kind=chat` 的 `createdTime` 是 epoch 毫秒。改动破坏线格式（对按数字读的客户端），
+> 因此不能反向移植进 1.2.0；钉住 id 那条的是 `ImSpringTestSupport#idOf`（判"必须是字符串"）与
 > `ImRestApiTest#conversationIdSurvivesAJavaScriptStyleRoundTrip`（判前端"拿到什么回填什么"这条
-> 自然路径真的走得通）。三支变异都验过有牙、按 `md5` 逐字节还原：摘实体标 ⇒ 3 条 REST 红，
-> 把帧载荷的 `asText()` 换回裸 `Long` ⇒ 2 条帧断言红，摘 `ImUnread` 的标 ⇒ 汇总那 1 条红
+> 自然路径真的走得通），钉住时间那条的是
+> `ImRealtimeTwoSocketTest#memberSocketOnRoomTopicReallyReceivesWhatAnotherMemberSent`
+> （既判 `instanceof String`，又判"截到秒后与库里那一行相等"）。
+> 五支变异都验过有牙、按 `md5` 逐字节还原：摘实体标 ⇒ 3 条 REST 红，
+> 把帧载荷的 `asText()` 换回裸 `Long` ⇒ 2 条帧断言红，摘 `ImUnread` 的标 ⇒ 汇总那 1 条红，
+> 把 `createdTime` 换回 epoch 毫秒 ⇒ 1 条红（读数 `不能是 epoch 数字: 1790444494286`），
+> 摘掉 `truncatedTo(SECONDS)` ⇒ 1 条红（`expected: <…T01:41:46> but was: <…T01:41:46.630615>`）
 > （读数与还原记录见 `README.md` §13）。`seq` 一类游标字段仍是数字，别顺手一起改。
 
 ## 3. topic 命名
