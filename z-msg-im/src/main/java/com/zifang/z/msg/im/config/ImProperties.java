@@ -19,7 +19,7 @@ public class ImProperties {
 
     /**
      * 会话列表 / 历史消息不传 size 时用这个值。
-     * 读处：{@code ImConversationService#pageMine}、{@code ImMessageService#history}。
+     * 读处：{@code ImConversationService#pageMine}、{@code ImMessageService#historyPage}。
      */
     private int defaultPageSize = 50;
 

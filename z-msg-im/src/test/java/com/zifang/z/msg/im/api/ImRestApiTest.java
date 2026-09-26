@@ -154,15 +154,15 @@ public class ImRestApiTest extends ImSpringTestSupport {
                 json(map("conversationId", gc, "content", "第一条", "clientMsgId", "rest-cm-1"))));
         assertEquals(m1.get("id"), retry.get("id"), "弱网重发只能有一个气泡");
         assertEquals(firstSeq, longOf(retry.get("seq")));
-        assertEquals(2, listSize(postJson(MSG + "/history", A,
+        assertEquals(2, historySize(postJson(MSG + "/history", A,
                 json(map("conversationId", gc, "sinceSeq", 0, "size", 10)))), "幂等重发不多插一行");
         assertEquals(2L, longOf(dataOf(postJson(MSG + "/head", A, json(map("conversationId", gc))))));
 
-        List<Object> tail = dataOf(postJson(MSG + "/history", A,
+        Map<String, Object> tail = dataMap(postJson(MSG + "/history", A,
                 json(map("conversationId", gc, "sinceSeq", 1, "size", 10))));
-        assertEquals(1, tail.size(), "增量拉取只该拿到 seq>1 的那一条");
-        assertEquals(2L, longOf(((Map<?, ?>) tail.get(0)).get("seq")));
-        assertEquals(1, listSize(postJson(MSG + "/history", A,
+        assertEquals(1, rows(tail).size(), "增量拉取只该拿到 seq>1 的那一条");
+        assertEquals(2L, longOf(((Map<?, ?>) rows(tail).get(0)).get("seq")));
+        assertEquals(1, historySize(postJson(MSG + "/history", A,
                 json(map("conversationId", gc, "sinceSeq", 0, "size", 1)))), "size 上限要真落到 SQL 上");
 
         // 4. 已读与未读
@@ -193,9 +193,15 @@ public class ImRestApiTest extends ImSpringTestSupport {
         assertOk(postJson(CONV + "/mute", A, json(map("conversationId", gc, "muted", true))));
         long cleared = longOf(dataOf(postJson(CONV + "/clear", A, json(map("conversationId", gc)))));
         assertEquals(2L, cleared);
-        assertEquals(0, listSize(postJson(MSG + "/history", A, json(map("conversationId", gc, "sinceSeq", 0)))),
-                "清空之后自己再也拉不到旧消息");
-        assertEquals(2, listSize(postJson(MSG + "/history", B, json(map("conversationId", gc, "sinceSeq", 0)))),
+        Map<String, Object> clearedView = dataMap(postJson(MSG + "/history", A,
+                json(map("conversationId", gc, "sinceSeq", 0))));
+        assertEquals(0, rows(clearedView).size(), "清空之后自己再也拉不到旧消息");
+        assertEquals(3L, longOf(clearedView.get("minVisibleSeq")),
+                "可见下界要如实报到 cleared_seq 之后：A 挡掉的是 seq 1、2");
+        assertEquals(2L, longOf(clearedView.get("headSeq")), "水位仍是清空时的位置");
+        assertEquals(Boolean.FALSE, clearedView.get("hasMore"), "被自己的游标挡掉的不该报成后面还有");
+        assertEquals(2L, longOf(clearedView.get("nextSinceSeq")), "空页的游标就是本次生效的下限");
+        assertEquals(2, historySize(postJson(MSG + "/history", B, json(map("conversationId", gc, "sinceSeq", 0)))),
                 "对照：B 的历史一条不少（清空只是自己的可见游标）");
         ResponseEntity<String> gone = postJson(MSG + "/at", A, json(map("conversationId", gc, "seq", 1)));
         assertEquals(404, gone.getStatusCodeValue(), "清空区间内的消息 404: " + gone.getBody());
@@ -203,7 +209,10 @@ public class ImRestApiTest extends ImSpringTestSupport {
         long afterClear = longOf(dataMap(postJson(MSG + "/send", A,
                 json(map("conversationId", gc, "content", "清空之后")))).get("seq"));
         assertEquals(3L, afterClear);
-        assertEquals(1, listSize(postJson(MSG + "/history", A, json(map("conversationId", gc, "sinceSeq", 0)))));
+        Map<String, Object> afterClearView = dataMap(postJson(MSG + "/history", A,
+                json(map("conversationId", gc, "sinceSeq", 0))));
+        assertEquals(1, rows(afterClearView).size());
+        assertEquals(3L, longOf(afterClearView.get("nextSinceSeq")), "游标停在真正拿到的那一条上");
         assertOk(postJson(MSG + "/at", A, json(map("conversationId", gc, "seq", afterClear))),
                 "对照：清空之后的消息查得到");
     }
@@ -325,6 +334,18 @@ public class ImRestApiTest extends ImSpringTestSupport {
         List<Object> rows = dataOf(resp);
         assertOk(resp);
         return rows.size();
+    }
+
+    /** {@code /history} 回的是对象，条数只在 {@code rows} 里 —— 别再拿整个 data 当数组。 */
+    private int historySize(ResponseEntity<String> resp) {
+        return rows(dataMap(resp)).size();
+    }
+
+    @SuppressWarnings("unchecked")
+    private static List<Object> rows(Map<String, Object> page) {
+        Object raw = page.get("rows");
+        assertTrue(raw instanceof List, "history 的 rows 不是数组: " + page);
+        return (List<Object>) raw;
     }
 
     private static Map<?, ?> firstMember(List<Object> rows, Long userId) {

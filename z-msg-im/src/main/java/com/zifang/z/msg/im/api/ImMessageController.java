@@ -3,6 +3,7 @@ package com.zifang.z.msg.im.api;
 import com.zifang.util.core.meta.Result;
 import com.zifang.z.msg.im.domain.entity.ImMessageDO;
 import com.zifang.z.msg.im.domain.model.ImForbiddenException;
+import com.zifang.z.msg.im.domain.model.ImHistoryPage;
 import com.zifang.z.msg.im.domain.model.ImNotFoundException;
 import com.zifang.z.msg.im.domain.service.ImMessageService;
 import com.zifang.z.msg.web.auth.MsgPrincipalResolver;
@@ -13,7 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -54,16 +54,20 @@ public class ImMessageController {
     /**
      * 增量拉历史：{@code seq > max(sinceSeq, 本人 cleared_seq)}，升序，最多 size 条。
      * 清空过的会话从这里读不到清空点以前的消息，但消息行并没有被删。
+     * <p>
+     * 返回的不是数组而是 {@link ImHistoryPage}：客户端要判定"还有没有 / 下次从几开始 /
+     * 少掉的那段是不是被自己的可见游标挡掉的"，这三件事的原料只在服务端手里。
      */
     @PostMapping("/history")
-    public Result<List<ImMessageDO>> history(HttpServletRequest request,
-                                             @RequestBody(required = false) Map<String, Object> body) {
+    public Result<ImHistoryPage> history(HttpServletRequest request,
+                                         @RequestBody(required = false) Map<String, Object> body) {
         Long me = principalResolver.require(request);
         Map<String, Object> b = ImApiSupport.requireBody(body);
         long sinceSeq = ImApiSupport.numberWithDefault(b, "sinceSeq", 0L);
         // size 不给就不填 0，由 service 落到 z-msg.im.default-page-size
         int size = ImApiSupport.intWithDefault(b, "size", 0);
-        return Result.success(messageService.history(ImApiSupport.id(b, "conversationId"), me, sinceSeq, size));
+        return Result.success(
+                messageService.historyPage(ImApiSupport.id(b, "conversationId"), me, sinceSeq, size));
     }
 
     /**

@@ -2,11 +2,13 @@ package com.zifang.z.msg.im.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.zifang.z.msg.im.ImSpringTestSupport;
+import com.zifang.z.msg.im.config.ImProperties;
 import com.zifang.z.msg.im.domain.entity.ImConversationDO;
 import com.zifang.z.msg.im.domain.entity.ImMessageDO;
 import com.zifang.z.msg.im.domain.mapper.ImMessageMapper;
 import com.zifang.z.msg.im.domain.model.ImConvTypes;
 import com.zifang.z.msg.im.domain.model.ImForbiddenException;
+import com.zifang.z.msg.im.domain.model.ImHistoryPage;
 import org.junit.jupiter.api.Test;
 
 import javax.annotation.Resource;
@@ -24,6 +26,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -45,6 +48,12 @@ public class ImMessageServiceTest extends ImSpringTestSupport {
 
     @Resource
     private ImMessageMapper messageMapper;
+    /** 直接占号用：造"水位抬了、行没落"这个生产里就存在的形态，不靠手改 SQL。 */
+    @Resource
+    private ImSequencer sequencer;
+    /** 只为把 {@code max-page-size} 压到一位数来验 hasMore 的来历，用完必须还原（bean 是全上下文共享的）。 */
+    @Resource
+    private ImProperties properties;
 
     // ---------------------------------------------------------------- seq
 
@@ -219,6 +228,112 @@ public class ImMessageServiceTest extends ImSpringTestSupport {
         assertTrue(messageService.history(conv, A, 999L, 10).isEmpty());
         // 负数 sinceSeq 按 0 处理，不是报错
         assertEquals(10, messageService.history(conv, A, -5L, 100).size());
+    }
+
+    @Test
+    public void hasMoreIsProbedNotGuessedAndTheCursorLoopTerminates() {
+        Long conv = conversationService.createGroup(A, Collections.singletonList(B),
+                "同步判定量", null, null, ImConvTypes.GROUP).getId();
+        for (int i = 1; i <= 10; i++) {
+            messageService.send(conv, A, "第 " + i + " 条");
+        }
+        // 把服务端大写压到 3：这时"请求 500 条"和"库里只剩 3 条"在裸数组上长得一模一样，
+        // 而 hasMore 是靠多读一条探出来的，不该跟着客户端给的 size 漂。
+        final int saved = properties.getMaxPageSize();
+        properties.setMaxPageSize(3);
+        try {
+            ImHistoryPage first = messageService.historyPage(conv, A, 0L, 500);
+            assertEquals(3, first.getRows().size(), "大写要真落在 LIMIT 上，不是给完再切");
+            assertTrue(first.isHasMore(), "被夹掉之后仍要说清后面还有：这是 size=500 与 max=3 之间唯一的信号");
+            assertEquals(3L, first.getNextSinceSeq());
+
+            // 客户端能照着 nextSinceSeq 走到底：不早停（不丢消息）、不死循环（终会 hasMore=false）
+            int seen = first.getRows().size();
+            long cursor = first.getNextSinceSeq();
+            boolean more = first.isHasMore();
+            int pages = 1;
+            while (more) {
+                ImHistoryPage p = messageService.historyPage(conv, A, cursor, 500);
+                assertTrue(p.getRows().size() <= 3, "每一页都不许超过服务端大写: " + p.getRows().size());
+                seen += p.getRows().size();
+                assertTrue(p.getNextSinceSeq() > cursor, "游标必须严格前进，否则这就是个死循环");
+                cursor = p.getNextSinceSeq();
+                more = p.isHasMore();
+                pages++;
+                assertTrue(pages <= 10, "页数不可能超过消息条数：游标没在前进");
+            }
+            assertEquals(10, seen, "照 nextSinceSeq 翻到底，一条不多一条不少");
+            assertEquals(4, pages);
+
+            // 正好回满最后一页时也不许谎报 hasMore（上面循环的最后一步就是这一档）
+            ImHistoryPage tail = messageService.historyPage(conv, A, 9L, 500);
+            assertEquals(1, tail.getRows().size());
+            assertFalse(tail.isHasMore(), "只剩一条时 hasMore 必须收住，否则客户端永远在空转");
+            // 满页并且后面真的没有了：这一档专门区分"回满 size"与"还有下一批"
+            ImHistoryPage exact = messageService.historyPage(conv, A, 7L, 500);
+            assertEquals(3, exact.getRows().size(), "前置：正好回满一页，否则这一条没有猎物");
+            assertFalse(exact.isHasMore(), "满页不等于还有：hasMore 只能来自多读的那一条");
+            // 空页：游标停在原地向前，不报错也不回退
+            ImHistoryPage empty = messageService.historyPage(conv, A, 10L, 500);
+            assertTrue(empty.getRows().isEmpty());
+            assertFalse(empty.isHasMore());
+            assertEquals(10L, empty.getNextSinceSeq());
+        } finally {
+            properties.setMaxPageSize(saved);
+        }
+        assertEquals(saved, properties.getMaxPageSize(), "改过共享 bean 必须还原，否则后面的用例在假上限下跑");
+    }
+
+    @Test
+    public void pageMetadataMakesASeqGapVisibleWithoutGuessingItsCause() {
+        Long conv = conversationService.createGroup(A, Collections.singletonList(B),
+                "空洞信号", null, null, ImConvTypes.GROUP).getId();
+        for (int i = 1; i <= 4; i++) {
+            messageService.send(conv, A, "第 " + i + " 条");
+        }
+        // 造一个真空洞，用的就是生产里那条已知代价的机制本身：占号成功、随后没有落库的行
+        // （并发重复提交撞唯一索引时输家就是这个形态）。不靠手改 SQL，也不靠 mock。
+        long claimed = sequencer.append(conversationService.requireConversation(conv),
+                sequencer.newMessageId(), "占了号但没有消息");
+        assertEquals(5L, claimed);
+
+        ImHistoryPage page = messageService.historyPage(conv, A, 0L, 100);
+        assertEquals(4, page.getRows().size());
+        assertEquals(4L, page.getNextSinceSeq());
+        assertFalse(page.isHasMore(), "库里确实没有 seq>4 的行，不该说后面还有");
+        assertEquals(5L, page.getHeadSeq(), "水位比拿到的最后一条高 1：空洞就此显形");
+        assertEquals(1L, page.getMinVisibleSeq(), "没清空过，可见下界就是 1");
+        // 客户端据此能算出"少了 5 号"，而且知道这不是被自己的 cleared_seq 挡掉的：
+        // minVisibleSeq <= 5 <= headSeq 而 5 不在 rows 里。服务端不猜原因，只把三段量交出去。
+        assertTrue(page.getHeadSeq() > page.getNextSinceSeq() && !page.isHasMore(),
+                "追不平又没更多可拉，是判定空洞的唯一形状");
+
+        // 对照：追平之后 headSeq 与 nextSinceSeq 重新相等，这个信号必须会消失
+        messageService.send(conv, A, "空洞之后的那条");
+        ImHistoryPage after = messageService.historyPage(conv, A, page.getNextSinceSeq(), 100);
+        assertEquals(1, after.getRows().size());
+        assertEquals(6L, after.getRows().get(0).getSeq().longValue());
+        assertEquals(6L, after.getHeadSeq(), "追平：水位就等于最后一条");
+        assertEquals(6L, after.getNextSinceSeq());
+    }
+
+    @Test
+    public void minVisibleSeqReportsTheCursorThatActuallyBitNotTheOneRequested() {
+        Long conv = conversationService.single(A, B, null).getId();
+        for (int i = 1; i <= 5; i++) {
+            messageService.send(conv, B, "旧消息 " + i);
+        }
+        assertEquals(5L, messageService.clear(conv, A));
+        // 请求的 sinceSeq 在 cleared_seq 之前：生效的是 cleared_seq，minVisibleSeq 要说的是它
+        ImHistoryPage page = messageService.historyPage(conv, A, 2L, 100);
+        assertTrue(page.getRows().isEmpty());
+        assertEquals(6L, page.getMinVisibleSeq(), "本人清到 5，可见下界就是 6，不是客户端要的 3");
+        assertEquals(5L, page.getNextSinceSeq(), "游标按生效下限给，客户端下次传它就不会反复撞同一道墙");
+        // 对照：B 没清空，同一条请求在 B 那边是另一回事
+        ImHistoryPage peer = messageService.historyPage(conv, B, 2L, 100);
+        assertEquals(3, peer.getRows().size());
+        assertEquals(3L, peer.getMinVisibleSeq());
+        assertEquals(5L, peer.getNextSinceSeq());
     }
 
     @Test

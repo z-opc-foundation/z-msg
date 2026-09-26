@@ -12,6 +12,7 @@ import com.zifang.z.msg.im.domain.entity.ImMessageDO;
 import com.zifang.z.msg.im.domain.mapper.ImMemberMapper;
 import com.zifang.z.msg.im.domain.mapper.ImMessageMapper;
 import com.zifang.z.msg.im.domain.model.ImConvTypes;
+import com.zifang.z.msg.im.domain.model.ImHistoryPage;
 import com.zifang.z.msg.im.domain.model.ImRoles;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -161,14 +162,17 @@ public class ImMessageService {
     // ---------------------------------------------------------------- 拉历史
 
     /**
-     * 增量拉历史：{@code seq > max(sinceSeq, 本人的 cleared_seq)}，升序，最多 size 条。
+     * 增量拉历史，带同步判定量（契约见 {@link ImHistoryPage}）。
      * <p>
      * 下限取 {@code cleared_seq} 是"清空聊天记录"的实现方式 —— 只把自己的可见游标推上去，
      * <b>不删任何消息行</b>：别人的历史还在，将来加回来的成员也能看到完整上下文。
+     * <p>
+     * {@code hasMore} 是靠"多读一条"探出来的，不是拿 {@code rows.size()} 和请求的 size 比：
+     * 请求的 size 会被 {@code max-page-size} 夹掉，比出来的结果在夹了的那一档上永远是对不了的。
      *
      * @param sinceSeq 客户端手里的水位，负数按 0 处理
      */
-    public List<ImMessageDO> history(Long conversationId, Long me, long sinceSeq, int size) {
+    public ImHistoryPage historyPage(Long conversationId, Long me, long sinceSeq, int size) {
         ImMemberDO member = conversationService.requireMember(conversationId, me);
         long floor = Math.max(sinceSeq < 0 ? 0L : sinceSeq,
                 member.getClearedSeq() == null ? 0L : member.getClearedSeq().longValue());
@@ -180,10 +184,30 @@ public class ImMessageService {
         // 不能"selectList 全捞出来再 subList"——那对一个十万条的会话就是一次 OOM。
         // searchCount=false：增量同步每 2 秒一次，不该为此多跑一条 COUNT(*)。
         int cap = clampSize(size);
-        Page<ImMessageDO> page = new Page<ImMessageDO>(1L, cap);
+        Page<ImMessageDO> page = new Page<ImMessageDO>(1L, cap + 1L);
         page.setSearchCount(false);
-        List<ImMessageDO> rows = messageMapper.selectPage(page, qw).getRecords();
-        return rows == null ? Collections.<ImMessageDO>emptyList() : rows;
+        List<ImMessageDO> read = messageMapper.selectPage(page, qw).getRecords();
+        List<ImMessageDO> rows = read == null ? Collections.<ImMessageDO>emptyList() : read;
+        boolean hasMore = rows.size() > cap;
+        if (hasMore) {
+            rows = new ArrayList<ImMessageDO>(rows.subList(0, cap));
+        }
+        long next = rows.isEmpty() ? floor : rows.get(rows.size() - 1).getSeq().longValue();
+        ImConversationDO conv = conversationService.requireConversation(conversationId);
+        long head = conv.getLastMsgSeq() == null ? 0L : conv.getLastMsgSeq().longValue();
+        return new ImHistoryPage(rows, next, hasMore, head, floor + 1L);
+    }
+
+    /**
+     * 只要消息本身：就是 {@link #historyPage} 的 {@code rows}，同一个查询、同一套可见性口径，
+     * 两条口子不会漂。
+     * <p>
+     * 本仓库的 main 里已经没有调用方（controller 走 {@code historyPage}）。留着它是因为这个签名
+     * 是 1.1.0 发布件里的公开 service API，宿主可能已经在用；判定量只有服务端给得出来，
+     * 所以新代码请直接用 {@code historyPage}。
+     */
+    public List<ImMessageDO> history(Long conversationId, Long me, long sinceSeq, int size) {
+        return historyPage(conversationId, me, sinceSeq, size).getRows();
     }
 
     /**
