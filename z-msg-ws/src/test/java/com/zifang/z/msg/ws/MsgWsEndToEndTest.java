@@ -134,6 +134,24 @@ public class MsgWsEndToEndTest extends WsHarness {
     }
 
     @Test
+    public void oneTicketOpensExactlyOneHandshake() throws Exception {
+        // 票进过 URL，就会被 access log、代理日志、浏览器历史原样留下来 —— 所以同一张票只该换到第一条连接。
+        String token = ticket(USER_A);
+        Recorder first = openUrl(wsUrl() + "?token=" + token);
+        awaitReady(first);
+        assertEquals(1, registry.onlineConnections(), "前置：第一条连接真的开起来了，否则下面的拒没有对照");
+
+        assertEquals(401, handshakeStatus(port, wsProperties.getPath() + "?token=" + token, true),
+                "同一张票第二次握手必须 401（一次性消费已生效）");
+        assertEquals(1, registry.onlineConnections(), "被拒的重放不得在注册表里留下第二条连接");
+
+        // 正向对照：401 来自"这张票用过了"，不是把用户或整个端点封了
+        Recorder second = connect(USER_A);
+        awaitReady(second);
+        assertEquals(2, registry.onlineConnections(), "换一张新票，同一用户照样能开第二条");
+    }
+
+    @Test
     public void repeatedTokenQueryParamIsNotAmbiguouslyAccepted() {
         String url = wsUrl() + "?token=" + ticket(USER_A) + "&token=" + ticket(USER_B);
         assertHandshakeRefused(url, "同一个 key 出现两次：不能随便挑一个当身份");

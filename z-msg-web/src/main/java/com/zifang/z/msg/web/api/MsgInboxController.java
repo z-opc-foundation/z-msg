@@ -91,6 +91,9 @@ public class MsgInboxController {
      * <p>
      * 浏览器 WebSocket 不能带 Authorization 头，而把长期 JWT 拼进 URL 会落进 access log、
      * 代理日志和浏览器历史。所以前端拿这个 60 秒 ticket 去连 {@code /api/msg/ws?token=...}。
+     * <p>
+     * 一张票只换一条连接：握手那侧消费它（{@code RealtimeTicketService#consume}），所以断线重连
+     * 必须重新调本接口，不能复用上一次拿到的 token。
      */
     @GetMapping("/ws-token")
     public Result<Map<String, Object>> wsToken(HttpServletRequest request) {

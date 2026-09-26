@@ -22,6 +22,11 @@ import java.util.Map;
  * 同理：本类任何日志都不打 token 原文。
  * <p>
  * 也不接受 {@code ?userId=1001} 这种"自称是谁"的参数：1.0.0 的越权面就是这么来的。
+ * <p>
+ * 握手用 {@code consume} 而不是 {@code verify}：正因为票进过 URL 就会被 access log 与代理日志
+ * 留下来，同一张票只该换得到第一条连接。这条记账在单个进程里，所以多实例部署时每台各认各的
+ * （见 {@link RealtimeTicketService#consume(String)} 的说明）——它缩小的是泄露票的重放窗口，
+ * 不是分布式下的严格一次。
  */
 public class MsgHandshakeInterceptor implements HandshakeInterceptor {
 
@@ -56,8 +61,10 @@ public class MsgHandshakeInterceptor implements HandshakeInterceptor {
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }
-        Long userId = tickets.verify(token);
+        Long userId = tickets.consume(token);
         if (userId == null) {
+            // 签名不对、已过期、以及"这张票刚才已经开过一条连接"三种情况都走这里：
+            // 响应上刻意不区分，免得给探测者回一句"这张票是真的、只是用过了"。
             response.setStatusCode(HttpStatus.UNAUTHORIZED);
             return false;
         }

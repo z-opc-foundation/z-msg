@@ -27,8 +27,10 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
   1.0.0 的越权面就是这么来的。
 - 同一个 key 出现两次（`?token=a&token=b`）**整体判非法**，不是挑一个用。
 - ticket 是 HMAC-SHA256 自签名的短时凭据，格式 `base64url(载荷).base64url(签名)`，
-  载荷为 `z-msg-ws|<userId>|<到期毫秒>|<nonce>`。**它不是一次性的**：TTL 内可重复用于重连，
-  但过期时间一到即失效（按毫秒比较，不做秒级截断）。
+  载荷为 `z-msg-ws|<userId>|<到期毫秒>|<nonce>`。**一张票只换一条连接**：握手按 `nonce` 记账，
+  第二次拿同一张票来 → 401（这条在主干代码里，**已发布的 1.1.0 还没有**，那一版 TTL 内可重放）。
+  所以重连必须重新调 `/inbox/ws-token`，不能缓存 token 复用。过期按毫秒比较，不做秒级截断。
+  记账在进程内存里：重启后旧票在 TTL 内还能再用一次，多实例则每台各记一次（详见 README §9）。
 - 浏览器不能给 `WebSocket` 加请求头，所以身份必须进 URL；正因为它会进 access log，
   这里绝不能换成长期 JWT。服务端任何日志都不打 token 原文。
 
@@ -38,6 +40,7 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
 | --- | --- |
 | 未配 `z-msg.realtime.ticket-secret` | 503（fail closed，绝不签弱密钥票） |
 | 缺 token / token 形状不对 / 签名对不上 | 401 |
+| 这张票已经开过一条连接（重放） | 401，与上一行**刻意不区分**：分辨它们等于告诉探测者这张票是真的 |
 | ticket 有效 | 101 升级，并立刻下发一帧 `ready` |
 | `z-msg.ws.enabled=false` | 404（端点根本不存在） |
 
