@@ -36,9 +36,14 @@ parent 是 pom-only，它的 `.jar` 本来就该 404）：
 变成调 `#consume`；`ImMessageController#history` 的返回从 `Result<List<ImMessageDO>>` 变成
 `Result<ImHistoryPage>`。**本 README 里已不再有"主干代码，尚未发布"这一档。**
 
-> ⚠️ **不要用 `z-boot-msg-starter`。** 它 1.0.11~1.0.14 在 Central 上都在，但 pom 里写死只引
-> `z-msg-web:1.0.0`（实测），既没有 `ws`/`im`/`channels`，也还是那个收件箱靠调用方自称 userId 的旧读侧
-> ——见 §14 迁移。
+> ⚠️ **`z-boot-msg-starter` 只能带你走一半。** 2026-09-26 21:12 实测 repo1：starter 最新是 `1.0.15`
+> （`1.0.16` 404），它的 pom 里只有一条 z-msg 依赖 — `z-msg-web:1.1.0`。所以走 starter 拿到的是
+> **1.1.0 的收件箱读侧**（已按服务端解出的身份过滤，不再是 1.0.0 那种"调用方自称 userId"），
+> 但**没有票的一次性消费、没有 `/history` 的判定量，`ws`/`im`/`channels` 三个坐标一个都不在内**。
+> 上面表里"聊天室 / 微信式 IM / 对接外部渠道"那三行，必须直接引 `z-msg-ws`、`z-msg-im`、`z-msg-channels`
+> 才拿得到——starter 的聚合范围决定它兜不住这三件事。（下面"这层能替你干什么"那张表里，只有前两行
+> `gateway.send` / 系统站内信走 starter 就够；WebSocket、五分钟聊天室、微信式 IM、外部渠道那四行
+> 都得按表里写的模块直接引。）
 
 ---
 
@@ -674,10 +679,10 @@ z-msg/
 
 | 项目 | 关系 |
 |---|---|
-| `z-boot` | BOM 与 starter 聚合（`z-boot-msg-starter` 当前 pin 1.0.0，见开头警告） |
+| `z-boot` | BOM 与 starter 聚合（`z-boot-msg-starter:1.0.15` 实测 pin `z-msg-web:1.1.0`；z-boot 仓内根 pom 的 `<z-msg.version>` 已在 09-26 21:11 抬到 1.2.0，但对外要等 `1.0.16` 发布，见开头警告） |
 | `z-ctc` | 宿主认证来源：`MsgPrincipalResolver` 生产实现接它的 JWT |
 | `z-mq` | 同系列消息队列；z-msg 刻意不依赖它。`RealtimeTransport` 本仓库只有一个实现（`WsSessionRegistry`，单机内存），多节点部署要宿主自己接一层桥 |
-| `z-opc` | 下游消费者（站内信、模板管理页、演示宿主的前端） |
+| `z-opc` | 下游消费者（站内信、模板管理页、演示宿主的前端）。**实测仍跑在 1.0.0**：09-26 21:15 数过，7 处 z-msg pin 全是 `1.0.0`（`pom.xml` 的 depMgmt 3 处、`bootstraps/z-opc-main-starter/pom.xml` 直接依赖 1 处、`z-qa` 与 `z-qa-core` 3 处），另有 6 处 `z-boot-msg-starter:1.0.11`（那份发布件 pin 的也是 `z-msg-web:1.0.0`）。也就是说 §14 的收件箱归属校验还没落到线上字节上 |
 
 ## 许可
 
