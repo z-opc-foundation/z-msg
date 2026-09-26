@@ -94,6 +94,8 @@ public class MsgWebSocketHandler extends TextWebSocketHandler {
         info.put("connectionId", id);
         info.put("userId", userId);
         info.put("topics", bound);
+        info.put("ops", clientOps(properties));
+        info.put("limits", advertisedLimits(properties));
         ready.setPayload(MsgJson.toJson(info));
         if (!session.send(ready)) {
             registry.unregister(id);
@@ -102,6 +104,54 @@ public class MsgWebSocketHandler extends TextWebSocketHandler {
             log.info("[z-msg-ws] 连接建立 id={} userId={} 自动订阅={} 在线={}",
                     id, userId, bound.size(), registry.onlineConnections());
         }
+    }
+
+    /**
+     * {@code ready.ops}：服务端认的客户端 op 清单。
+     * <p>
+     * 这份清单是给前端读的，不是给文档抄的：接 z-msg 的页面不该靠翻源码判断"这条连接能不能发
+     * {@code op=auth}"（1.2.0 及以前的发布件里根本没有这张帧，问了就是 {@code WS_OP_UNSUPPORTED}）。
+     * 所以它的判据必须和分发处共用同一个开关，而不能是另一处手写死的名单。
+     * 双向都有守卫，见 {@code MsgWsReadySelfDescriptionTest}：报出去的每一条 op 都真发一帧回去、
+     * 断言拿到的不是 {@code WS_OP_UNSUPPORTED}；加了 {@code .equals(op)} 分支却没进清单的，由普查例拦下。
+     */
+    static List<String> clientOps(WsProperties properties) {
+        List<String> ops = new ArrayList<String>();
+        ops.add(RealtimeMessage.OP_PING);
+        ops.add(RealtimeMessage.OP_SUBSCRIBE);
+        ops.add(RealtimeMessage.OP_UNSUBSCRIBE);
+        ops.add(RealtimeMessage.OP_PUBLISH);
+        if (properties.isInbandAuthEnabled()) {
+            ops.add(RealtimeMessage.OP_AUTH);
+        }
+        return ops;
+    }
+
+    /**
+     * {@code ready.limits}：把资源上限报给客户端，让它不必把默认值抄成自己的常量。
+     * <p>
+     * 只报服务端**真的会执行**的那些：三个"0 或负数 = 不限"的字段（单连接 topic 上限、每用户连接
+     * 上限、空闲超时）在关掉时**整个键缺席**。这不是省字节：报 {@code maxTopicsPerConnection: 0}
+     * 会被前端读成"一个都不许订"，而实际语义是"没有这道闸"——一个键的缺席与一个 0，
+     * 差着一个功能是被禁还是被查。
+     * <p>
+     * 值全部现取自已注入的 {@link WsProperties}：注册表的挤占、handler 的 topic 上限、
+     * 容器的 buffer/idle 三个消费方拿的是同一个实例，所以"报的和执行的不一致"只可能是代码写错，
+     * 而不是有两份真值源。
+     */
+    static Map<String, Object> advertisedLimits(WsProperties properties) {
+        Map<String, Object> limits = new java.util.LinkedHashMap<String, Object>();
+        if (properties.getMaxTopicsPerConnection() > 0) {
+            limits.put("maxTopicsPerConnection", Integer.valueOf(properties.getMaxTopicsPerConnection()));
+        }
+        if (properties.getMaxSessionsPerUser() > 0) {
+            limits.put("maxSessionsPerUser", Integer.valueOf(properties.getMaxSessionsPerUser()));
+        }
+        if (properties.getIdleTimeoutSeconds() > 0) {
+            limits.put("idleTimeoutSeconds", Integer.valueOf(properties.getIdleTimeoutSeconds()));
+        }
+        limits.put("maxTextMessageBytes", Integer.valueOf(properties.getMaxTextMessageBytes()));
+        return limits;
     }
 
     @Override

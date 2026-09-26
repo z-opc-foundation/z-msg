@@ -110,7 +110,7 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
 ### 服务端 → 客户端
 
 ```jsonc
-{"op":"ready","ts":...,"payload":"{\"connectionId\":\"...\",\"userId\":7101,\"topics\":[\"user:7101\",\"sys:broadcast\",\"room:lobby\"]}"}
+{"op":"ready","ts":...,"payload":"{\"connectionId\":\"...\",\"userId\":7101,\"topics\":[\"user:7101\",\"sys:broadcast\",\"room:lobby\"],\"ops\":[\"ping\",\"subscribe\",\"unsubscribe\",\"publish\"],\"limits\":{\"maxTopicsPerConnection\":64,\"maxSessionsPerUser\":8,\"idleTimeoutSeconds\":120,\"maxTextMessageBytes\":262144}}"}
 {"op":"message","kind":"inbox","topic":"user:7101","seq":1,"ts":...,"payload":"{...}"}
 {"op":"ack","clientMsgId":"s1","payload":"{\"subscribed\":[\"room:7001\"],\"topics\":[...]}" }
 {"op":"error","clientMsgId":"p1","errorCode":"WS_TOPIC_FORBIDDEN","errorMessage":"..."}
@@ -118,6 +118,27 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
 
 连接建立时**自动订阅**这三类，前端不必先发 `subscribe` 就能收红点：
 `user:<自己>`、`sys:broadcast`、以及 `z-msg.ws.public-topics` 里显式列出的 topic。
+
+### `ready` 的 `ops` 与 `limits`：服务端把自己**真的在执行**的那份报出来
+
+（**主干新增，不在任何已发布构件里**：1.2.0 及以前的 `ready` 只有
+`connectionId` / `userId` / `topics` 三个键。加法语义，老前端多读不认识的键没有影响。）
+
+- `ops`：服务端认的客户端帧。它和分发处读的是同一个开关，所以 `auth` **只在
+  `z-msg.ws.inband-auth-enabled=true` 时出现**；前端不必再猜"这个环境有没有带内换票"。
+  注意它说的是"这张帧有人处理"，不是"你有权限发"——`publish` 永远在清单里，
+  放不放行仍由 §4 的策略逐条三态判。
+- `limits`：**只报服务端真的会执行的那些**。`maxTopicsPerConnection` / `maxSessionsPerUser` /
+  `idleTimeoutSeconds` 三项在配成 0 或负数（=不限，或"别动容器默认值"）时**整个键缺席**，
+  而不是报一个 0：前端把 `"maxTopicsPerConnection": 0` 读成"一条都不许订"，
+  而那项的真实语义是"没有这道闸"。`maxTextMessageBytes` 总会报，因为容器 buffer 一定按它设。
+- 这些数与那道闸**同源**：值取自注册表、handler 与容器 bean 共用的同一个 `WsProperties` 实例，
+  由 `MsgWsReadySelfDescriptionTest` 拿"报的 4 就是拒第 5 条的那个数"对撞出来；
+  `MsgWsReadyOptOutsTest` 钉反面（报"缺席"的三项确实不拦：一次订 8 条全过、同一用户连开 3 条都在）。
+- 前端因此可以按 `idleTimeoutSeconds` 定心跳间隔（要明显小于它），按
+  `maxTopicsPerConnection` 预算订阅数，而不是抄本文档里的默认值。
+- 有守卫要求"分发处的 `op` 分支 == 报出去的清单"双向一致（`MsgWsOpCensusTest`）：
+  加一张新帧却忘了登记进 `ready.ops`，红的是那一条，因为客户端永远发现不了没报的能力。
 
 站内信（`kind=inbox`）的 payload 字段：
 `id`、`msgId`、`eventType`、`msgType`、`title`、`content`、`linkUrl`、`priority`、
@@ -188,6 +209,7 @@ TopicAuthorizationPolicy roomPolicy(final ImMembershipService members) {
 | `z-msg.ws.max-topics-per-connection` | 64 | 越界整帧拒绝 |
 
 写在这里但没人读的配置就是骗人的广告——上面每一项都有对应的 bean 或断言在读它。
+后四项里被真正执行的那些还会出现在 `ready.limits`（见 §2）：宿主改了 yml，前端不用跟着改常量。
 
 ## 7. 断线与并发
 

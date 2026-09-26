@@ -34,12 +34,18 @@ parent 是 pom-only，它的 `.jar` 本来就该 404）：
 1.2.0 相对 1.1.0 的全部内容就是这两处，而且都在发布字节里验到过（拿 1.1.0 的发布 jar 做阴性对照，
 `javap` 于 `~/.m2` 与 repo1 各自下载的构件）：`MsgHandshakeInterceptor` 从调 `RealtimeTicketService#verify`
 变成调 `#consume`；`ImMessageController#history` 的返回从 `Result<List<ImMessageDO>>` 变成
-`Result<ImHistoryPage>`。**本 README 里已不再有"主干代码，尚未发布"这一档。**
+`Result<ImHistoryPage>`。
 
-> ⚠️ **`z-boot-msg-starter` 只能带你走一半。** 2026-09-26 21:12 实测 repo1：starter 最新是 `1.0.15`
-> （`1.0.16` 404），它的 pom 里只有一条 z-msg 依赖 — `z-msg-web:1.1.0`。所以走 starter 拿到的是
-> **1.1.0 的收件箱读侧**（已按服务端解出的身份过滤，不再是 1.0.0 那种"调用方自称 userId"），
-> 但**没有票的一次性消费、没有 `/history` 的判定量，`ws`/`im`/`channels` 三个坐标一个都不在内**。
+> ⚠️ **`repo1` 上最新仍是 1.2.0，而主干已经走到它前面了。** 有三处改动只在 `origin/main` 上、
+> 不在任何发布构件里：`op=auth` 带内换票（§4）、`ready` 的 `ops`/`limits` 自描述（§4）、
+> 腾讯云短信与极光推送两个 sender（§7，且只经过离线固定向量与 stub，没向厂商真投过一条）。
+> **"主干代码，尚未发布"这一档又回来了**（上一段那个结论只对 1.2.0 那两件事成立）；
+> 本文点到这三处的段落都各自带着这句限定，别看代码时以为线上就有。
+
+> ⚠️ **`z-boot-msg-starter` 只能带你走一半。** 2026-09-27 00:00 实测 repo1：starter 最新是 `1.0.16`
+> （`1.0.17` 404），它的 pom 里的 z-msg 依赖**只有一条** — `z-msg-web:1.2.0`。
+> 这一版 pin 对了：1.2.0 的收件箱读侧（按服务端解出的身份过滤）与 `/history` 的同步判定量都拿得到。
+> 但**`ws` / `im` / `channels` 三个坐标一个都不在聚合里**，所以
 > 上面表里"聊天室 / 微信式 IM / 对接外部渠道"那三行，必须直接引 `z-msg-ws`、`z-msg-im`、`z-msg-channels`
 > 才拿得到——starter 的聚合范围决定它兜不住这三件事。（下面"这层能替你干什么"那张表里，只有前两行
 > `gateway.send` / 系统站内信走 starter 就够；WebSocket、五分钟聊天室、微信式 IM、外部渠道那四行
@@ -63,12 +69,13 @@ parent 是 pom-only，它的 `.jar` 本来就该 404）：
 ## 模块结构
 
 8 个 Maven 模块（`${revision}` + flatten，parent 自给自足）。**两把尺要分开读**：
-当前工作树 `mvn -B -o clean verify` = **总计 202 例、0 失败 0 跳过**
-（core 26 / channels 82 / web 13 / ws 19 / im 55 / example 7）；
-而 **repo1 上已发布的 1.2.0 那棵树是 177 例**（channels 57，发布那一场 `mvn -B clean deploy -Pcentral`
+当前工作树 `mvn -B -o clean verify` = **总计 222 例、0 失败 0 跳过**
+（core 26 / channels 82 / web 13 / ws 39 / im 55 / example 7）；
+而 **repo1 上已发布的 1.2.0 那棵树是 177 例**（channels 57 / ws 19，发布那一场 `mvn -B clean deploy -Pcentral`
 **没带** `-DskipTests`，上传出去的字节就是那 177 例跑绿的那批 jar，三方 sha256 对账见 §14）。
-两者差的 25 例全在 channels：腾讯云 SMS（10）+ 极光推送（10）+ TC3/Basic 固定向量与凭据不上日志（5），
-**这一批还没发布，所以对外仍是 177 的口径**。1.1.0 发布件是 168 例，
+差的 45 例全在主干上、还没发布：channels 25（腾讯云 SMS 10 + 极光推送 10 + TC3/Basic 固定向量与
+凭据不上日志 5）、ws 13（带内换票 `op=auth` 那一轮，ws 19→32）、ws 7（`ready` 自描述那一轮，32→39）。
+**所以对外仍是 177 的口径。** 1.1.0 发布件是 168 例，
 多出来的 6 例是票的一次性消费那一轮（5 支 core + 1 支真握手 ws E2E），3 例是增量同步判定量那一轮（全在 im 服务层）。
 
 | 模块 | 职责 | 测试 |
@@ -77,7 +84,7 @@ parent 是 pom-only，它的 `.jar` 本来就该 404）：
 | `z-msg-core` | 默认 provider（mock / SMTP）、`ChannelRouter`、限流、重试、模板、投递日志、批量、站内信读写侧、7 张表的 DDL | 26 |
 | `z-msg-channels` | 真实外部渠道 provider：钉钉/企微/飞书/Slack 群机器人、公众号模板消息、阿里云与腾讯云短信、极光推送、录制 mock | 82 |
 | `z-msg-web` | REST Controller + `MsgAutoConfiguration`（`spring.factories`）+ 身份接缝 + 管理面闸门 `AdminEndpointGate` | 13 |
-| `z-msg-ws` | WebSocket 实时接入层：短期票握手、帧协议、topic 订阅、三态授权、在线注册表 | 19 |
+| `z-msg-ws` | WebSocket 实时接入层：短期票握手、帧协议（含 `ready` 自描述与带内换票）、topic 订阅、三态授权、在线注册表 | 39 |
 | `z-msg-im` | 会话/成员/消息/已读回执域，seq 分配与增量同步，自带 4 张表与 REST | 55 |
 | `z-msg-example` | 能跑的大厅聊天室 + 站内信宿主（**1.2.0 起真的不进发布清单**：repo1 实测这一件 404、其余七件 200，见 §14），顺带承载端点普查 | 7 |
 
@@ -205,6 +212,14 @@ WS  /api/msg/ws?token=<token>      ← 握手只认这张票，签名/受众/过
 `subscribe` / `unsubscribe` / `publish` / `ping` / `auth` 五张客户端帧和 `pong` / `ready` / `message` /
 `ack` / `error` 五张服务端帧。逐字段、错误码、资源上限、断线与并发语义都在
 [`_doc/001_WS_PROTOCOL.md`](_doc/001_WS_PROTOCOL.md)；最小前端片段在那份文档的 §8（最小前端）。
+
+`ready` 除了 `connectionId` / `userId` / `topics`，还会报出 `ops`（服务端认哪几张帧）与
+`limits`（当前真正生效的资源上限）——**主干新增，1.2.0 及以前的发布件里 `ready` 只有前三个键**。
+它要顶掉的是前端抄默认值这件事：`idle-timeout-seconds` 从 120 改成 31 之后，症状是"连上没多久
+就断线，而浏览器侧看不出原因"。两条口径要记住：
+`auth` 只在 `inband-auth-enabled=true` 时出现在 `ops` 里（报的是"有人处理"，不是"你有权限发"，
+`publish` 一直在清单里而放行仍由策略判）；配成 0/负数的那三项上限**整个键缺席**而不是报 0，
+因为 `"maxTopicsPerConnection": 0` 会被读成"一条都不许订"，而它的真意是"没有这道闸"。
 
 `op=auth` 是**主干新增、默认关闭**的一张帧（`z-msg.ws.inband-auth-enabled=true` 才认；
 1.2.0 及以前的发布件里没有这个 op，回了就是 `WS_OP_UNSUPPORTED`）。它解决的是"票 60s 过期，
@@ -537,7 +552,7 @@ mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 |---|---|
 | core | `SchemaParityTest`（MySQL/H2 两份 DDL 真跑执行、同表同列）、`SenderRegistryProviderDefaultTest`（缺 provider 时兜底成 mock 且被如实标记）、`RealtimeTicketServiceTest` 11 例（签发/验签/过期/篡改之外，一次性消费那一格钉了五例：`consume` 只放行第一次、`verify` 仍可重复且**不是**安全闸门、按票记账不按用户、过期票不进账、2 万条上限真把住且超量时是降级不是拒登）、`WebhookSenderTest`、`LegacySpiAdapterTest` |
 | web | `MsgInboxApiTest` 8 例：匿名 401 而登录 200、`oneUserCannotSeeOrMutateAnotherUsersInbox`、过期项既不列表也不计红点、分页真截断且 `total` 是真的、同 `idempotencyKey` 不重复入库、自省接口如实标 mock、`ws-token` 绑当前人。`MsgAdminEndpointGateTest` 4 例：缺省时 9 条管理面请求（含挂在 `MessageController` 上的 `GET /delivery/stats`）一律 HTTP 403、403 正文里点名那个开关、非管理面端点照常答（且缺身份仍是 401 而不是被闸门顺手改成 403）、前缀匹配按路径段对齐。`MsgAdminEndpointEnabledTest` 1 例：同一批请求打开开关全 200 且返回真分页结构——这一例是前四例的对照，否则"路由压根没挂上"也能让 403 假绿 |
-| ws | 握手 fail-closed 2 例 / `enabled=false` 全撤 1 例 / 端到端 11 例（多的一例：同一张票第二次握手 401，且换一张新票同用户照样连得上） / 授权策略 4 例 / 注册表索引 1 例（8 持票 × 4 加入 × 20000 代对撞，并断言 `GENERATIONS*JOINERS` 次订阅全部成立——防止"对撞没跑满"的假绿） / 带内换票 8 例（主干，`inband-auth-enabled=true`：同身份续期与重放必拒、坏票不改任何状态、缺 token 判坏帧、换身份后旧用户红点断流、非本人频道按新身份复核并退订、票的签名段进不了日志）+ 默认关时 1 例（回 `WS_AUTH_DISABLED` 而其余 op 一切照旧）+ 注册表 `rebindIdentity` 4 例 |
+| ws | 握手 fail-closed 2 例 / `enabled=false` 全撤 1 例 / 端到端 11 例（多的一例：同一张票第二次握手 401，且换一张新票同用户照样连得上） / 授权策略 4 例 / 注册表索引 1 例（8 持票 × 4 加入 × 20000 代对撞，并断言 `GENERATIONS*JOINERS` 次订阅全部成立——防止"对撞没跑满"的假绿） / 带内换票 8 例（主干，`inband-auth-enabled=true`：同身份续期与重放必拒、坏票不改任何状态、缺 token 判坏帧、换身份后旧用户红点断流、非本人频道按新身份复核并退订、票的签名段进不了日志）+ 默认关时 1 例（回 `WS_AUTH_DISABLED` 而其余 op 一切照旧）+ 注册表 `rebindIdentity` 4 例 + `ready` 自描述 7 例（`ops`/`limits` 与那道闸同源 3 例、配成"不限"时三项该整键缺席且确实不拦 3 例、分发分支与清单双向一致的源码普查 1 例） |
 | im | 自动装配 6 例（含"im 的 mapper 与 core 的 mapper 落在同一个 `sqlSessionFactoryMsg`"）、禁用路径 2 例（读 `ConditionEvaluationReport` 定位到 `OnPropertyCondition` 且点名 `im.enabled`）、三态授权 7 例、两条真 socket 的实时 6 例、REST 5 例、服务层 29 例（增量同步判定量那一格三例：`hasMore` 只能来自多读的那一条、照 `nextSinceSeq` 翻到底一条不多一条不少、`minVisibleSeq` 报的是真生效的那个游标而不是客户端要的那个） |
 | example | 7 例：A 发言进 B 的帧、未放行 topic 被拒而大厅同连接可发、站内信三处同时命中、未登录 401、首页真伺服、同一个 cookie jar 里两个标签页仍是两个人，外加 `MsgAdminSurfaceCensusTest`：在这个全量装配的宿主里把活的 handler mapping 逐条过闸门，钉住"拦下 12 条 / 放行 32 条"两份清单，并先断言普查真的数到了 40+ 个映射 |
 
@@ -569,6 +584,21 @@ REST 的 `水位仍是清空时的位置 <2> but was: <0>`）；摘掉探针行�
 另有两支是**量具自己的对照**，不许当成缺漏：一支摘掉"两次读之间连接被摘走"的早退守卫，
 预期就是全绿（那条窗口在本用例形状下够不着，能杀掉它的只有真造出竞态的用例）；
 一支故意让日志漏票，用来证明"日志零命中"不是因为 appender 一条都没收到。
+
+"`ready` 自描述"这一轮 8 支（只打 `MsgWebSocketHandler` 一个文件，量具
+`~/.cache/zmsg_ready_mutants.py`，读数只吃 surefire XML 的具名失败），7 支红、1 支按设计该活：
+limits 里的 topic 上限写死成默认 64 ⇒ `limitsInReadyAreTheSameNumbersTheServerEnforces`；
+摘掉"没设过就不报"那道 `> 0`、空闲超时照报 ⇒ `anIdleTimeoutWeNeverSetIsNotAdvertised` 与
+`limitsThatAreSwitchedOffAreAbsentAndActuallyNotEnforced` 两支；`auth` 无条件进清单 ⇒
+`authIsAbsentFromTheAdvertisedOpsButStillAnswersByName`；整条 `ops` 不发 ⇒
+`everyAdvertisedOpReachesItsOwnBranch` 与上面那支一起红；**把闸改成读字面量 64 而 ready 仍报配置值**
+（这一支才是"报的数就是那道闸"的正猎物）⇒ `limitsInReadyAreTheSameNumbersTheServerEnforces`；
+把"不限"当成 0 报出去 ⇒ `limitsThatAreSwitchedOffAreAbsentAndActuallyNotEnforced`；
+**加一张分发了却没登记进清单的帧** ⇒ 只有 `MsgWsOpCensusTest#dispatchedOpBranchesAndTheAdvertisedListAgree`
+红——端到端那几支对它全无感觉（那张帧什么都不做，客户端也不知道有它），这正是普查例要存在的理由。
+该活的那支是 `LinkedHashMap`→`TreeMap`（只改 JSON 键顺序）：**键顺序不是契约，没人钉是对的**，
+留着它是为了证明前面七支红不是因为量具一视同仁地什么都杀。八支跑完 `MsgWebSocketHandler.java`
+与注入前逐字节一致（`md5 970a203b…`），随后 `mvn -B -o clean verify` 全量 **222 例 / 0 失败 / 0 跳过**。
 
 ---
 
@@ -716,7 +746,7 @@ z-msg/
 
 | 项目 | 关系 |
 |---|---|
-| `z-boot` | BOM 与 starter 聚合（`z-boot-msg-starter:1.0.15` 实测 pin `z-msg-web:1.1.0`；z-boot 仓内根 pom 的 `<z-msg.version>` 已在 09-26 21:11 抬到 1.2.0，但对外要等 `1.0.16` 发布，见开头警告） |
+| `z-boot` | BOM 与 starter 聚合（`z-boot-msg-starter:1.0.16` 是 repo1 上的最新件，实测 pin `z-msg-web:1.2.0`、且 `1.0.17` 404；`1.0.15` 那版 pin 的是 `1.1.0`。**聚合里只有 `z-msg-web` 这一条**，`ws`/`im`/`channels` 要直接引，见开头那条警告） |
 | `z-ctc` | 宿主认证来源：`MsgPrincipalResolver` 生产实现接它的 JWT |
 | `z-mq` | 同系列消息队列；z-msg 刻意不依赖它。`RealtimeTransport` 本仓库只有一个实现（`WsSessionRegistry`，单机内存），多节点部署要宿主自己接一层桥 |
 | `z-opc` | 下游消费者（站内信、模板管理页、演示宿主的前端）。**实测仍跑在 1.0.0**：09-26 21:15 数过，7 处 z-msg pin 全是 `1.0.0`（`pom.xml` 的 depMgmt 3 处、`bootstraps/z-opc-main-starter/pom.xml` 直接依赖 1 处、`z-qa` 与 `z-qa-core` 3 处），另有 6 处 `z-boot-msg-starter:1.0.11`（那份发布件 pin 的也是 `z-msg-web:1.0.0`）。也就是说 §14 的收件箱归属校验还没落到线上字节上 |
