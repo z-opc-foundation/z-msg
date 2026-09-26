@@ -29,6 +29,12 @@ public class WebhookSender implements ChannelSender {
 
     private static final Logger log = LogManager.getLogger(WebhookSender.class);
 
+    /**
+     * 只有一个 provider 名：投递日志里 {@code provider} 列同时出现 "http" 和 "webhook"
+     * 两种值（成功记后者、拒连记前者），按 provider 聚合的统计就永远是错的。
+     */
+    private static final String PROVIDER = "http";
+
     @Override
     public String channel() {
         return Channels.WEBHOOK;
@@ -36,7 +42,7 @@ public class WebhookSender implements ChannelSender {
 
     @Override
     public String provider() {
-        return "http";
+        return PROVIDER;
     }
 
     @Override
@@ -49,7 +55,7 @@ public class WebhookSender implements ChannelSender {
     public MessageSendResult send(Message message) {
         String url = message.getReceiver();
         if (url == null || url.trim().isEmpty()) {
-            return MessageSendResult.fail("http", "INVALID_RECEIVER", "webhook url 为空");
+            return MessageSendResult.fail(PROVIDER, "INVALID_RECEIVER", "webhook url 为空");
         }
         java.util.Map<String, Object> body = new java.util.LinkedHashMap<>();
         body.put("msgId", message.getMsgId());
@@ -70,8 +76,20 @@ public class WebhookSender implements ChannelSender {
         long start = System.currentTimeMillis();
         String providerMessageId = "WEBHOOK-" + RandomUtil.uuidShort(16);
         HttpURLConnection conn = null;
+        URL target;
         try {
-            conn = (HttpURLConnection) new URL(url).openConnection();
+            target = new URL(url);
+        } catch (Exception e) {
+            return MessageSendResult.fail(PROVIDER, "INVALID_URL", "url 不合法: " + e.getMessage());
+        }
+        // 只允许 http/https：receiver 是业务传进来的，file:// / jar:// 这类 handler
+        // 会把"发一条 webhook"变成"读服务器本地文件"（z-msg-channels 的 http 层同一口径）
+        String scheme = target.getProtocol();
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            return MessageSendResult.fail(PROVIDER, "UNSUPPORTED_SCHEME", "只支持 http/https: " + scheme);
+        }
+        try {
+            conn = (HttpURLConnection) target.openConnection();
             conn.setRequestMethod("POST");
             conn.setDoOutput(true);
             conn.setConnectTimeout(timeoutMs);
@@ -85,15 +103,15 @@ public class WebhookSender implements ChannelSender {
             int duration = (int) (System.currentTimeMillis() - start);
             if (code >= 200 && code < 300) {
                 log.info("[Webhook] OK url={} code={} duration={}ms id={}", url, code, duration, providerMessageId);
-                return MessageSendResult.ok("webhook", providerMessageId);
+                return MessageSendResult.ok(PROVIDER, providerMessageId);
             } else {
                 log.warn("[Webhook] FAIL url={} code={} duration={}ms id={}", url, code, duration, providerMessageId);
-                return MessageSendResult.fail("webhook",
+                return MessageSendResult.fail(PROVIDER,
                         "HTTP_" + code, "Webhook 返回非 2xx: " + code);
             }
         } catch (Exception e) {
             log.error("[Webhook] EXCEPTION url={} err={}", url, e.getMessage());
-            return MessageSendResult.fail("webhook", "WEBHOOK_ERROR", e.getMessage());
+            return MessageSendResult.fail(PROVIDER, "WEBHOOK_ERROR", e.getMessage());
         } finally {
             if (conn != null) {
                 conn.disconnect();

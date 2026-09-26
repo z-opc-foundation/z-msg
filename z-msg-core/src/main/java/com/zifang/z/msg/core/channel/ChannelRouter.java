@@ -245,8 +245,12 @@ public class ChannelRouter {
     private Outcome attemptSend(ChannelSender sender, Message message) {
         long start = System.currentTimeMillis();
         if (!sender.ready()) {
-            return Outcome.skipped(message.getChannel(), "PROVIDER_NOT_CONFIGURED",
+            Outcome notConfigured = Outcome.skipped(message.getChannel(), "PROVIDER_NOT_CONFIGURED",
                     "provider " + sender.provider() + " 配置不完整");
+            // provider 列必须填：这一行存在的意义就是"哪一个 provider 没配齐"，
+            // 空着的话投递日志里最该看的那一类反而查不出来
+            notConfigured.setProvider(sender.provider());
+            return notConfigured;
         }
         MessageSendResult res;
         try {

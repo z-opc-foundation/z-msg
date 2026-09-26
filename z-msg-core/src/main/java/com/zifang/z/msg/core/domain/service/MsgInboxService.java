@@ -53,7 +53,11 @@ public class MsgInboxService {
         if (msgType != null && !msgType.isEmpty()) {
             qw.eq(InAppMessage::getMsgType, msgType);
         }
-        qw.select(InAppMessage::getId, InAppMessage::getMsgId, InAppMessage::getEventType,
+        // userId 在这份投影里是故意留下的：它不是展示字段，但它是宿主唯一能自证
+        // "这一行为什么在我这儿"的列。省掉一个 BIGINT 换不来什么，换来的是宿主
+        // 拿到一排 userId=null 的行、越权回归时谁都发现不了（正文 content 才是省的那一列）。
+        qw.select(InAppMessage::getId, InAppMessage::getUserId, InAppMessage::getMsgId,
+                InAppMessage::getEventType,
                 InAppMessage::getMsgType, InAppMessage::getTitle, InAppMessage::getLinkUrl,
                 InAppMessage::getIsRead, InAppMessage::getPriority, InAppMessage::getPinned,
                 InAppMessage::getReadTime, InAppMessage::getExpireAt, InAppMessage::getCreatedTime);

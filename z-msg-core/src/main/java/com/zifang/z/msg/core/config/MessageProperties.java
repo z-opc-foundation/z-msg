@@ -138,6 +138,9 @@ public class MessageProperties {
 
     /**
      * 按通道取配置，支持 {@code IM_DINGTALK} / {@code im_dingtalk} / {@code im-dingtalk} 三种写法。
+     * <p>
+     * 只读用。未配置时返回的是临时对象，往它身上 {@code set} 什么都不会留下
+     * ——要改配置请改 {@link #getChannel()} 里那个 map。
      *
      * @return 永不返回 null（未配置时给一个空对象）
      */

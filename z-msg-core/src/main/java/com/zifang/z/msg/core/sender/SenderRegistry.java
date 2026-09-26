@@ -5,6 +5,7 @@ import com.zifang.z.msg.api.Channels;
 import com.zifang.z.msg.api.EmailMessage;
 import com.zifang.z.msg.api.EmailSender;
 import com.zifang.z.msg.api.Message;
+import com.zifang.z.msg.api.MessageException;
 import com.zifang.z.msg.api.MessageSendResult;
 import com.zifang.z.msg.api.SmsMessage;
 import com.zifang.z.msg.api.SmsSender;
@@ -179,7 +180,12 @@ public class SenderRegistry {
                     .templateParams(message.getParams())
                     .signName(message.param("signName", null))
                     .build();
-            return delegate.send(sms);
+            return structured(delegate.name(), new java.util.function.Supplier<MessageSendResult>() {
+                @Override
+                public MessageSendResult get() {
+                    return delegate.send(sms);
+                }
+            });
         }
     }
 
@@ -216,8 +222,39 @@ public class SenderRegistry {
                     .templateParams(message.getParams())
                     .subject(message.getSubject())
                     .build();
-            return delegate.send(email);
+            return structured(delegate.name(), new java.util.function.Supplier<MessageSendResult>() {
+                @Override
+                public MessageSendResult get() {
+                    return delegate.send(email);
+                }
+            });
         }
+    }
+
+    /**
+     * 遗留 SPI（{@link SmsSender} / {@link EmailSender}）没有"不许抛"这条约定，
+     * 但 {@link ChannelSender} 有：router 的兜底 catch 会把任何异常归成
+     * {@code PROVIDER_EXCEPTION}，于是 {@code SmtpEmailSender} 抛的
+     * "MSG_SMTP_FROM_MISSING（你没配 default-from）"在投递日志里和"运营商拒发"
+     * 长一个样，还会被重试策略当成可重试的那一类。
+     * <p>
+     * 所以适配层负责把抛出的 {@link MessageException} 换回它本来的错误码，
+     * 其余异常兜成结构化失败（provider 列取 {@link ChannelSender#provider()} 的值）。
+     */
+    private static MessageSendResult structured(String provider,
+                                                java.util.function.Supplier<MessageSendResult> call) {
+        MessageSendResult r;
+        try {
+            r = call.get();
+        } catch (MessageException e) {
+            return MessageSendResult.fail(provider, e.getErrorCode(), e.getMessage());
+        } catch (Exception e) {
+            return MessageSendResult.fail(provider, "PROVIDER_EXCEPTION", e.toString());
+        }
+        if (r == null) {
+            return MessageSendResult.fail(provider, "PROVIDER_NULL_RESULT", "provider 返回 null");
+        }
+        return r;
     }
 
     private static boolean isMockName(String provider, String simpleClassName) {
