@@ -87,14 +87,7 @@ public class WsSessionRegistry implements RealtimeTransport {
             return null;
         }
         for (String topic : removed.topics()) {
-            Set<String> ids = idsByTopic.get(topic);
-            if (ids != null) {
-                ids.remove(connectionId);
-                if (ids.isEmpty()) {
-                    // 空 topic 不回收的话，一个建过又解散的群会永远占着一个 key
-                    idsByTopic.remove(topic, ids);
-                }
-            }
+            dropFromTopicIndex(topic, connectionId);
         }
         indexUser(removed, false);
         return removed;
@@ -108,7 +101,14 @@ public class WsSessionRegistry implements RealtimeTransport {
         if (!s.subscribe(topic)) {
             return true;
         }
-        idsByTopic.computeIfAbsent(topic, k -> ConcurrentHashMap.newKeySet()).add(connectionId);
+        // add 必须放进 compute 里：computeIfAbsent(topic).add(id) 的那次 add 不在 map 的桶锁内，
+        // 于是可以和下面 dropFromTopicIndex 的"发现集合空了就摘掉 key"交错 —— 结果是这条连接在
+        // session.topics() 里看着订上了、索引里却没有，从此收不到该 topic 的任何帧。
+        idsByTopic.compute(topic, (k, v) -> {
+            Set<String> ids = v == null ? ConcurrentHashMap.newKeySet() : v;
+            ids.add(connectionId);
+            return ids;
+        });
         return true;
     }
 
@@ -117,14 +117,28 @@ public class WsSessionRegistry implements RealtimeTransport {
         if (s == null || !s.unsubscribe(topic)) {
             return false;
         }
-        Set<String> ids = idsByTopic.get(topic);
-        if (ids != null) {
-            ids.remove(connectionId);
-            if (ids.isEmpty()) {
-                idsByTopic.remove(topic, ids);
-            }
-        }
+        dropFromTopicIndex(topic, connectionId);
         return true;
+    }
+
+    /**
+     * 从某 topic 的订阅索引里摘掉一条连接，集合空了就把 key 一起回收。
+     * <p>
+     * "删成员"和"判空后摘 key"必须在同一次 {@code compute} 里做完。分成
+     * {@code get → remove → isEmpty → remove(key, value)} 四步的话，摘 key 那一刻
+     * 集合可能刚被一个并发 {@link #subscribe} 重新填上（它拿的是同一个集合对象），
+     * key 一摘，那条订阅就成了孤儿。断开连接是这条路径最常走的地方：一个人关标签页，
+     * 正好另一个人订上同一个房间。
+     */
+    private void dropFromTopicIndex(String topic, String connectionId) {
+        idsByTopic.compute(topic, (k, v) -> {
+            if (v == null) {
+                return null;
+            }
+            v.remove(connectionId);
+            // 空 topic 不回收的话，一个建过又解散的群会永远占着一个 key
+            return v.isEmpty() ? null : v;
+        });
     }
 
     public MsgWsSession find(String connectionId) {
@@ -257,16 +271,23 @@ public class WsSessionRegistry implements RealtimeTransport {
         if (uid == null) {
             return;
         }
+        // 和 subscribe 同一个理由：改动要落在 compute 里，才不会和"发现空了就摘 key"交错，
+        // 让一条连接从 idsByUser 里漏掉 —— 漏掉的那条不会被挤占判定数到，
+        // max-sessions-per-user 就只是个装饰。
         if (add) {
-            idsByUser.computeIfAbsent(uid, k -> ConcurrentHashMap.newKeySet()).add(session.getId());
+            idsByUser.compute(uid, (k, v) -> {
+                Set<String> ids = v == null ? ConcurrentHashMap.newKeySet() : v;
+                ids.add(session.getId());
+                return ids;
+            });
             return;
         }
-        Set<String> ids = idsByUser.get(uid);
-        if (ids != null) {
-            ids.remove(session.getId());
-            if (ids.isEmpty()) {
-                idsByUser.remove(uid, ids);
+        idsByUser.compute(uid, (k, v) -> {
+            if (v == null) {
+                return null;
             }
-        }
+            v.remove(session.getId());
+            return v.isEmpty() ? null : v;
+        });
     }
 }
