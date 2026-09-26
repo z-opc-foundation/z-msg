@@ -279,7 +279,10 @@ z-msg:
 传输层默认（只允许订 `user:<自己>` 和配置里声明的公共 topic）。
 
 跑起来的完整版本在 `z-msg-example`：两条真 WebSocket、两个登录身份、A 打字 B 立刻看到，
-由 `MsgExampleApplicationTest` 在无 mock 的情况下钉住。
+由 `MsgExampleApplicationTest` 在无 mock 的情况下钉住。演示页也是"前端不必猜"这句话的
+消费方：页头显示 `ready` 报回来的 `ops`/`limits`，心跳间隔按 `idleTimeoutSeconds` 推
+（推导规则与三档实测见 `_doc/001_WS_PROTOCOL.md` §2）。这一段只在主干上——对着已发布的
+1.2.0 起宿主时 `ready` 里没有这些键，页面会显示"服务端未自描述"并落回 20s 兜底心跳。
 
 ## 6. 微信式 IM
 
@@ -537,7 +540,7 @@ MySQL 与 H2 各一份，同源由 `SchemaParityTest` 真跑执行验证：
 
 ```bash
 cd z-msg
-mvn -B -o clean verify                        # 当前树 8 模块、202 例（1.2.0 发布件那棵树 177 例；1.1.0 是 168 例）
+mvn -B -o clean verify                        # 当前树 8 模块、222 例（1.2.0 发布件那棵树 177 例；1.1.0 是 168 例）
 mvn -B -o -DskipTests install                 # 装进 ~/.m2，一次即可
 mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 ```

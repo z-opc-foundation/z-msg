@@ -49,6 +49,7 @@
   <span class="dot" id="sock"></span>
   <span class="who" id="state">未登录</span>
   <span class="who">未读 <span class="badge" id="unread">-</span></span>
+  <span class="who" id="limits" title="服务端在 ready 帧里报出来的、它真的在执行的那份限额">-</span>
 </header>
 
 <main>
@@ -87,7 +88,9 @@
 <script>
 (function () {
   var LOBBY = 'room:lobby';
-  var me = null, myName = null, ws = null, seq = 0, pingTimer = null;
+  // 兜底心跳：服务端是 1.2.0 或更早时 ready 里根本没有 limits，这个限流被关成 0 时对应的键也会缺失。
+  var FALLBACK_PING_MS = 20000;
+  var me = null, myName = null, ws = null, seq = 0, connSeq = 0;
   var pending = {};   // clientMsgId -> 气泡元素，等服务端原样回带 clientMsgId 来对号
 
   // 一个浏览器只有一个 cookie jar，两个标签页带的是同一个 JSESSIONID —— 只用 cookie 的话
@@ -217,6 +220,7 @@
     return api('/api/msg/inbox/ws-token').then(function (res) {
       if (!res || !res.success) {
         $('state').textContent = '换票失败：' + ((res && res.message) || 'HTTP 未认证');
+        $('limits').textContent = '没连上，服务端限额未知';
         throw new Error('ws-token: ' + (res && res.message));
       }
       var proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
@@ -225,22 +229,73 @@
     });
   }
 
+  /**
+   * 心跳取服务端在 ready 里报的那道空闲超时的一半，夹在 2s—30s。
+   * 落回兜底值的两种情况：服务端是 1.2.0 或更早（ready 里压根没有 limits），
+   * 以及那道限流被关成 0（关掉的项按"键缺失"广告而不是报 0）—— 这两种服务端都不会
+   * 因为空闲掐连接，所以兜底值只是多发点 ping，不会误事。
+   */
+  function heartbeatMs(limits) {
+    var idle = limits ? Number(limits.idleTimeoutSeconds) : 0;
+    if (!(idle > 0)) { return FALLBACK_PING_MS; }
+    return Math.max(2000, Math.min(30000, idle * 500));
+  }
+
+  function describeReady(info) {
+    if (!info || !info.ops) { return '服务端未自描述（1.2.0 及更早的 ready 里没有 ops/limits）'; }
+    var l = info.limits || {};
+    var parts = [];
+    for (var k in l) {
+      if (Object.prototype.hasOwnProperty.call(l, k)) { parts.push(k + '=' + l[k]); }
+    }
+    // 键缺失 = 那道限流没启用，所以这里只列报出来的几项，不能替服务端补 0
+    return 'ops ' + info.ops.length + ' 项 · 限额 ' + (parts.join(' · ') || '（均未启用）')
+      + ' · 心跳 ' + Math.round(heartbeatMs(info.limits) / 1000) + 's';
+  }
+
+  // 心跳挂在连接自己身上：换身份时旧连接的 close 会晚于新连接建立才到，共用一个全局
+  // timer 的话它 clearInterval 清掉的是新连接那一份（实测过：换完身份之后还在跳的那份，
+  // 相位仍是第一条连接的 20s，也就是页面上已经没有属于当前连接的心跳了）。
+  function startHeartbeat(sock, ms) {
+    stopHeartbeat(sock);
+    sock.zMsgPing = setInterval(function () {
+      if (sock.readyState === 1) { sock.send(JSON.stringify({ op: 'ping', clientMsgId: 'p' + (++seq) })); }
+    }, ms);
+  }
+
+  function stopHeartbeat(sock) {
+    if (sock && sock.zMsgPing) { clearInterval(sock.zMsgPing); sock.zMsgPing = null; }
+  }
+
   function open(url) {
-    if (ws) { try { ws.close(); } catch (e) {} }
-    ws = new WebSocket(url);
-    ws.onopen = function () { $('sock').className = 'dot up'; $('state').textContent = myName + '（已连接）'; };
-    ws.onclose = function () {
+    if (ws) { try { stopHeartbeat(ws); ws.close(); } catch (e) {} }
+    // 一个页面只该有一条活的连接，可事件是异步的：给每条连接编号，只有"仍是最新那条"
+    // 的连接才允许动 UI，否则换完身份界面会被旧连接的收尾打回「已断开」。
+    var mySeq = ++connSeq;
+    var sock = new WebSocket(url);
+    ws = sock;
+    $('limits').textContent = '等服务端自描述…';
+    sock.onopen = function () {
+      if (mySeq !== connSeq) { return; }
+      $('sock').className = 'dot up';
+      $('state').textContent = myName + '（已连接）';
+    };
+    sock.onclose = function () {
+      stopHeartbeat(sock);
+      if (mySeq !== connSeq) { return; }
       $('sock').className = 'dot down';
       $('state').textContent = myName + '（已断开）';
-      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
     };
-    ws.onerror = function () { toast('连接出错，看帧日志'); };
-    ws.onmessage = function (evt) {
+    sock.onerror = function () { if (mySeq === connSeq) { toast('连接出错，看帧日志'); } };
+    sock.onmessage = function (evt) {
+      if (mySeq !== connSeq) { return; }
       var f = JSON.parse(evt.data);
       log('← ' + evt.data);
       if (f.op === 'ready') {
         var info = JSON.parse(f.payload);
         log('自动订阅: ' + info.topics.join(', '));
+        $('limits').textContent = describeReady(info);
+        startHeartbeat(sock, heartbeatMs(info.limits));
       } else if (f.op === 'message' && f.kind === 'chat') {
         var chat = JSON.parse(f.payload);
         // 自己发的那条服务端会原样回给包括自己在内的所有订阅者（含本人），
@@ -259,9 +314,6 @@
         toast(f.errorCode + '：' + f.errorMessage);
       }
     };
-    pingTimer = setInterval(function () {
-      if (ws && ws.readyState === 1) { ws.send(JSON.stringify({ op: 'ping', clientMsgId: 'p' + (++seq) })); }
-    }, 20000);
   }
 
   function publish(text) {
