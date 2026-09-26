@@ -329,13 +329,20 @@ public class ImMessageService {
      * {@code op=message / kind=chat / topic / seq / ts} 由 {@code RealtimeMessage} 负责，
      * 这里只给 payload 本体。时间是 epoch 毫秒而不是 LocalDateTime ——
      * 对端不必为它配 JavaTime 模块。
+     * <p>
+     * 三个 id 一律出字符串：雪花是 19 位十进制，而 JS 的 Number 只有 53 bit 精度
+     * （安全上界 9007199254740991，16 位），浏览器 {@code JSON.parse} 会把
+     * {@code 2103885891501236225} 读成 {@code 2103885891501236200}。前端拿着这个数去
+     * 拼 {@code room:<id>} 或回传 {@code /message/send}，症状是"刚建好的会话查不到"
+     * （403 无权访问会话），而它在服务端一侧从未存在过——最难查的那类 bug。
+     * seq / lastReadSeq 留在数字里：它们是会话内从 1 起的游标，客户端要拿它做算术。
      */
     private Map<String, Object> payloadOf(ImMessageDO message, LocalDateTime when) {
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("id", message.getId());
-        payload.put("conversationId", message.getConversationId());
+        payload.put("id", asText(message.getId()));
+        payload.put("conversationId", asText(message.getConversationId()));
         payload.put("seq", message.getSeq());
-        payload.put("senderUserId", message.getSenderUserId());
+        payload.put("senderUserId", asText(message.getSenderUserId()));
         payload.put("msgType", message.getMsgType());
         payload.put("content", message.getContent());
         if (message.getClientMsgId() != null) {
@@ -365,8 +372,8 @@ public class ImMessageService {
             return;
         }
         Map<String, Object> payload = new LinkedHashMap<String, Object>();
-        payload.put("conversationId", conversationId);
-        payload.put("userId", readerUserId);
+        payload.put("conversationId", asText(conversationId));
+        payload.put("userId", asText(readerUserId));
         payload.put("lastReadSeq", lastReadSeq);
         try {
             publisher.publish(RealtimeTopics.room(conversationId), RealtimeMessage.KIND_READ,
@@ -374,6 +381,14 @@ public class ImMessageService {
         } catch (RuntimeException e) {
             log.warn("[z-msg-im] read 帧投递失败 conversation={} err={}", conversationId, e.toString());
         }
+    }
+
+    /**
+     * 雪花 id 出线时统一成字符串，理由见 {@link #payloadOf}。null 保持 null：
+     * {@code MsgJson} 以 NON_NULL 序列化，写 {@code "null"} 反而会让对端多判一种形状。
+     */
+    private static String asText(Long id) {
+        return id == null ? null : id.toString();
     }
 
     /**

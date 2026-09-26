@@ -1,5 +1,8 @@
 package com.zifang.z.msg.im.domain.model;
 
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
+
 /**
  * 未读汇总的一行（一个会话一条），以及未读口径的唯一计算处 {@link #of}。
  * <p>
@@ -15,6 +18,8 @@ package com.zifang.z.msg.im.domain.model;
  */
 public class ImUnread {
 
+    // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
     private String convType;
     private String title;

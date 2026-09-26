@@ -3,6 +3,8 @@ package com.zifang.z.msg.im.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
 import java.time.LocalDateTime;
 
@@ -21,8 +23,14 @@ import java.time.LocalDateTime;
 public class ImReadReceiptDO {
 
     @TableId(type = IdType.ASSIGN_ID)
+    // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
+    // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
+    // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long userId;
     /**
      * 只允许单调前进，写 SQL 上带 {@code last_read_seq < #{seq}} 条件，

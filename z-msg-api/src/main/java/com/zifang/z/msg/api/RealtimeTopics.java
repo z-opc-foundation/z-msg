@@ -6,7 +6,12 @@ package com.zifang.z.msg.api;
  * 一条连接可订阅多个 topic；服务端在握手阶段按登录用户自动订阅 {@link #user} 与
  * {@link #tenant} 前缀，业务侧只需订阅房间/会话。
  * <p>
- * 命名一律 {@code 前缀:标识}，标识内不允许再出现冒号（解析按第一个冒号切分）。
+ * 命名一律 {@code 前缀:标识}，解析按第一个冒号切分。除 {@link #P_BIZ} 天生带一段分组
+ * （{@code biz:<group>:<key>}，此时 {@link #keyOf} 带回整段 {@code group:key}）之外，
+ * 标识内不允许再出现冒号。
+ * <p>
+ * {@code room:} 的标识是会话 id：它在线上是 19 位雪花，<b>拼 topic 请用字符串而不是
+ * Number</b>（JS 的 Number 只有 53 bit，会舍掉末位），见 {@code _doc/001_WS_PROTOCOL.md} §2。
  */
 public final class RealtimeTopics {
 

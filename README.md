@@ -36,11 +36,12 @@ parent 是 pom-only，它的 `.jar` 本来就该 404）：
 变成调 `#consume`；`ImMessageController#history` 的返回从 `Result<List<ImMessageDO>>` 变成
 `Result<ImHistoryPage>`。
 
-> ⚠️ **`repo1` 上最新仍是 1.2.0，而主干已经走到它前面了。** 有三处改动只在 `origin/main` 上、
+> ⚠️ **`repo1` 上最新仍是 1.2.0，而主干已经走到它前面了。** 有四处改动只在 `origin/main` 上、
 > 不在任何发布构件里：`op=auth` 带内换票（§4）、`ready` 的 `ops`/`limits` 自描述（§4）、
-> 腾讯云短信与极光推送两个 sender（§7，且只经过离线固定向量与 stub，没向厂商真投过一条）。
+> 腾讯云短信与极光推送两个 sender（§7，且只经过离线固定向量与 stub，没向厂商真投过一条）、
+> **IM 的 id 线格式从数字改成字符串**（§6，这一条是**破坏性**变更，别指望把它塞回 1.2.0）。
 > **"主干代码，尚未发布"这一档又回来了**（上一段那个结论只对 1.2.0 那两件事成立）；
-> 本文点到这三处的段落都各自带着这句限定，别看代码时以为线上就有。
+> 本文点到这四处的段落都各自带着这句限定，别看代码时以为线上就有。
 
 > ⚠️ **`z-boot-msg-starter` 只能带你走一半。** 2026-09-27 00:00 实测 repo1：starter 最新是 `1.0.16`
 > （`1.0.17` 404），它的 pom 里的 z-msg 依赖**只有一条** — `z-msg-web:1.2.0`。
@@ -69,12 +70,13 @@ parent 是 pom-only，它的 `.jar` 本来就该 404）：
 ## 模块结构
 
 8 个 Maven 模块（`${revision}` + flatten，parent 自给自足）。**两把尺要分开读**：
-当前工作树 `mvn -B -o clean verify` = **总计 222 例、0 失败 0 跳过**
-（core 26 / channels 82 / web 13 / ws 39 / im 55 / example 7）；
+当前工作树 `mvn -B -o clean verify` = **总计 224 例、0 失败 0 跳过**
+（core 26 / channels 82 / web 13 / ws 39 / im 56 / example 8）；
 而 **repo1 上已发布的 1.2.0 那棵树是 177 例**（channels 57 / ws 19，发布那一场 `mvn -B clean deploy -Pcentral`
 **没带** `-DskipTests`，上传出去的字节就是那 177 例跑绿的那批 jar，三方 sha256 对账见 §14）。
-差的 45 例全在主干上、还没发布：channels 25（腾讯云 SMS 10 + 极光推送 10 + TC3/Basic 固定向量与
-凭据不上日志 5）、ws 13（带内换票 `op=auth` 那一轮，ws 19→32）、ws 7（`ready` 自描述那一轮，32→39）。
+差的 47 例全在主干上、还没发布：channels 25（腾讯云 SMS 10 + 极光推送 10 + TC3/Basic 固定向量与
+凭据不上日志 5）、ws 13（带内换票 `op=auth` 那一轮，ws 19→32）、ws 7（`ready` 自描述那一轮，32→39）、
+im 1（id 线格式那一轮，REST 5→6）、example 1（私聊面板那条端到端，7→8）。
 **所以对外仍是 177 的口径。** 1.1.0 发布件是 168 例，
 多出来的 6 例是票的一次性消费那一轮（5 支 core + 1 支真握手 ws E2E），3 例是增量同步判定量那一轮（全在 im 服务层）。
 
@@ -296,6 +298,20 @@ z-msg:
 | 已读 / 未读 / 回执 | `last_read_seq` + `uk_im_receipt_conv_user`，未读汇总按会话返回 |
 | 服务端署名 | 发言落库时 `sender_user_id` 与 `seq` 都由服务端写——这是它和"大厅自报 from"的区别 |
 | 别人订不到你的房间 | `ImTopicAuthorizationPolicy` 按成员表判 `room:`，非成员 `FALSE`，且**不影响**大厅放行 |
+| 前端拿到的 id 是准的 | 会话/消息/用户引用的 id 线上一律**字符串**（REST 与实时帧同一条规则）——19 位雪花出成 JSON 数字，浏览器 `JSON.parse` 会舍掉末位 |
+
+**这条形状是主干改动，1.2.0 及以前出的是数字**，属破坏性线格式变更，不能塞回已发布的构件里。
+它的理由不是"好看"：id 一旦被舍入，前端拿舍过的值去拼 `room:<id>` 或回填 `message/send`，
+收到的是 `403 无权访问会话 <一个服务端从未有过的 id>`，而这条会话正是它一秒前自己建的——
+症状与权限配错完全一样。钉住的是 `ImSpringTestSupport#idOf`（判形状）与
+`ImRestApiTest#conversationIdSurvivesAJavaScriptStyleRoundTrip`（判"拿到什么就回填什么"这条
+前端自然路径真走得通），细节在 `_doc/001_WS_PROTOCOL.md` §2。`seq` 一类游标仍是数字。
+
+标注的位置有 6 个类，不是 1 个：4 张表的实体（`ImConversationDO` / `ImMemberDO` / `ImMessageDO` /
+`ImReadReceiptDO`）各 3 个字段、会话视图 `ImConversationView` 3 个、未读汇总 `ImUnread` 1 个，
+再加上 `ImMessageService` 里两处手工拼的帧载荷（`payloadOf`、`publishReadFrame`）走 `asText()`。
+`ImUnread` 那一处是"给实体打标"这个动作结构上覆盖不到的：它是 `ImReadService` 现装的另一份 DTO，
+只由 `unread/summary` 的线上形状钉着（变异验证见 §13）。
 
 `ImMessageService#send` 的完整签名：
 
@@ -335,8 +351,10 @@ for (;;) {
 - `nextSinceSeq` 是本次下限之后真正交出去的最后一条；空页时它就是本次生效的下限，
   客户端照它传下次不会反复撞同一道墙。
 - `minVisibleSeq = max(请求的 sinceSeq, 本人的 cleared_seq) + 1`：被自己的"清空聊天记录"挡掉的那一段，
-  和"库里本来就没有"的那一段，靠它区分。`headSeq` 是读取时刻的会话水位（`last_msg_seq`），
-  在拉取之后才读，所以它只会等于或高于本次给出去的最后一条。
+  和"库里本来就没有"的那一段，靠它区分。它是**从本次请求的下界推出来的，不是会话的绝对下界**：
+  拿着 `sinceSeq=1` 去问一个只有 `seq=1` 的会话，回的就是 `minVisibleSeq=2`，
+  这句话说的是"本次之后从 2 起看"，不是"1 被服务端藏起来了"。`headSeq` 是读取时刻的会话水位
+  （`last_msg_seq`），在拉取之后才读，所以它只会等于或高于本次给出去的最后一条。
 
 ## 7. 外部渠道对接
 
@@ -540,7 +558,7 @@ MySQL 与 H2 各一份，同源由 `SchemaParityTest` 真跑执行验证：
 
 ```bash
 cd z-msg
-mvn -B -o clean verify                        # 当前树 8 模块、222 例（1.2.0 发布件那棵树 177 例；1.1.0 是 168 例）
+mvn -B -o clean verify                        # 当前树 8 模块、224 例（1.2.0 发布件那棵树 177 例；1.1.0 是 168 例）
 mvn -B -o -DskipTests install                 # 装进 ~/.m2，一次即可
 mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 ```
@@ -556,8 +574,13 @@ mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 | core | `SchemaParityTest`（MySQL/H2 两份 DDL 真跑执行、同表同列）、`SenderRegistryProviderDefaultTest`（缺 provider 时兜底成 mock 且被如实标记）、`RealtimeTicketServiceTest` 11 例（签发/验签/过期/篡改之外，一次性消费那一格钉了五例：`consume` 只放行第一次、`verify` 仍可重复且**不是**安全闸门、按票记账不按用户、过期票不进账、2 万条上限真把住且超量时是降级不是拒登）、`WebhookSenderTest`、`LegacySpiAdapterTest` |
 | web | `MsgInboxApiTest` 8 例：匿名 401 而登录 200、`oneUserCannotSeeOrMutateAnotherUsersInbox`、过期项既不列表也不计红点、分页真截断且 `total` 是真的、同 `idempotencyKey` 不重复入库、自省接口如实标 mock、`ws-token` 绑当前人。`MsgAdminEndpointGateTest` 4 例：缺省时 9 条管理面请求（含挂在 `MessageController` 上的 `GET /delivery/stats`）一律 HTTP 403、403 正文里点名那个开关、非管理面端点照常答（且缺身份仍是 401 而不是被闸门顺手改成 403）、前缀匹配按路径段对齐。`MsgAdminEndpointEnabledTest` 1 例：同一批请求打开开关全 200 且返回真分页结构——这一例是前四例的对照，否则"路由压根没挂上"也能让 403 假绿 |
 | ws | 握手 fail-closed 2 例 / `enabled=false` 全撤 1 例 / 端到端 11 例（多的一例：同一张票第二次握手 401，且换一张新票同用户照样连得上） / 授权策略 4 例 / 注册表索引 1 例（8 持票 × 4 加入 × 20000 代对撞，并断言 `GENERATIONS*JOINERS` 次订阅全部成立——防止"对撞没跑满"的假绿） / 带内换票 8 例（主干，`inband-auth-enabled=true`：同身份续期与重放必拒、坏票不改任何状态、缺 token 判坏帧、换身份后旧用户红点断流、非本人频道按新身份复核并退订、票的签名段进不了日志）+ 默认关时 1 例（回 `WS_AUTH_DISABLED` 而其余 op 一切照旧）+ 注册表 `rebindIdentity` 4 例 + `ready` 自描述 7 例（`ops`/`limits` 与那道闸同源 3 例、配成"不限"时三项该整键缺席且确实不拦 3 例、分发分支与清单双向一致的源码普查 1 例） |
-| im | 自动装配 6 例（含"im 的 mapper 与 core 的 mapper 落在同一个 `sqlSessionFactoryMsg`"）、禁用路径 2 例（读 `ConditionEvaluationReport` 定位到 `OnPropertyCondition` 且点名 `im.enabled`）、三态授权 7 例、两条真 socket 的实时 6 例、REST 5 例、服务层 29 例（增量同步判定量那一格三例：`hasMore` 只能来自多读的那一条、照 `nextSinceSeq` 翻到底一条不多一条不少、`minVisibleSeq` 报的是真生效的那个游标而不是客户端要的那个） |
-| example | 7 例：A 发言进 B 的帧、未放行 topic 被拒而大厅同连接可发、站内信三处同时命中、未登录 401、首页真伺服、同一个 cookie jar 里两个标签页仍是两个人，外加 `MsgAdminSurfaceCensusTest`：在这个全量装配的宿主里把活的 handler mapping 逐条过闸门，钉住"拦下 12 条 / 放行 32 条"两份清单，并先断言普查真的数到了 40+ 个映射 |
+| im | 自动装配 6 例（含"im 的 mapper 与 core 的 mapper 落在同一个 `sqlSessionFactoryMsg`"）、禁用路径 2 例（读 `ConditionEvaluationReport` 定位到 `OnPropertyCondition` 且点名 `im.enabled`）、三态授权 7 例、两条真 socket 的实时 6 例、REST 6 例（多的一例是 id 线格式：`conversationIdSurvivesAJavaScriptStyleRoundTrip`
+——把响应里那串 19 位字符**原样**回填进 `message/send`、`message/history`、`unread/summary` 再比一次，
+前端"照着文档做"的路径因此是被钉住的，而不是靠约定）、服务层 29 例（增量同步判定量那一格三例：`hasMore` 只能来自多读的那一条、照 `nextSinceSeq` 翻到底一条不多一条不少、`minVisibleSeq` 报的是真生效的那个游标而不是客户端要的那个） |
+| example | 8 例：A 发言进 B 的帧、未放行 topic 被拒而大厅同连接可发、站内信三处同时命中、未登录 401、首页真伺服、同一个 cookie jar 里两个标签页仍是两个人，外加私聊面板那条端到端
+（`singleChatPanelPathWorksOnTheDemoHostWithServerSignedIds`：真 Tomcat + 真 H2 + 两条真 socket 走完
+"开会话 → 两侧各自订 `room:<id>` → 发言时自称 `senderUserId=999999` 仍被服务端改成登录身份 →
+按 topic 数清扇出次数 → 标已读拿到 read 帧 → 拉一页增量"），外加 `MsgAdminSurfaceCensusTest`：在这个全量装配的宿主里把活的 handler mapping 逐条过闸门，钉住"拦下 12 条 / 放行 32 条"两份清单，并先断言普查真的数到了 40+ 个映射 |
 
 这些不是"跑过一遍绿了"就完事：每条新增的守卫都做过变异验证（摘掉守卫必须变红，然后按 `md5`
 还原成字节一致再复跑）。管理面闸门这一轮跑了 9 支：摘掉拦截器注册、从清单里少写一个前缀、
@@ -601,7 +624,23 @@ limits 里的 topic 上限写死成默认 64 ⇒ `limitsInReadyAreTheSameNumbers
 红——端到端那几支对它全无感觉（那张帧什么都不做，客户端也不知道有它），这正是普查例要存在的理由。
 该活的那支是 `LinkedHashMap`→`TreeMap`（只改 JSON 键顺序）：**键顺序不是契约，没人钉是对的**，
 留着它是为了证明前面七支红不是因为量具一视同仁地什么都杀。八支跑完 `MsgWebSocketHandler.java`
-与注入前逐字节一致（`md5 970a203b…`），随后 `mvn -B -o clean verify` 全量 **222 例 / 0 失败 / 0 跳过**。
+与注入前逐字节一致（`md5 970a203b…`），随后 `mvn -B -o clean verify` 全量 **222 例 / 0 失败 / 0 跳过**
+（那是那一轮的树；当前工作树 224，口径见 §模块结构）。
+
+"id 线格式"这一轮 3 支，全部红在具名断言上（同样 `cp` 副本 + `md5` 逐字节还原后复跑全绿）：
+摘掉 `ImConversationDO` 上的 `@JsonSerialize(using = ToStringSerializer.class)` ⇒ im 模块 3 条红
+（`ImRestApiTest#selfReportedIdentityInBodyIsIgnoredNotHonoredAndNotFatal`、
+`#conversationAndMessageFlowOverHttp`、`#conversationIdSurvivesAJavaScriptStyleRoundTrip` 里那句
+"响应体里 id 必须带引号"，红消息直接印出 `实际线上形状是 java.lang.Long` 和整份响应）；
+把 `payloadOf` 里三处 `asText(...)` 换回裸 `Long`（帧载荷退回数字）⇒ 实时 2 条红
+（`ImRealtimeTwoSocketTest#memberSocketOnRoomTopicReallyReceivesWhatAnotherMemberSent`、
+`#singleChatAlsoLandsOnThePeersOwnUserTopicWithoutSubscribing`，都红在 `idOf` 那句形状断言）；
+摘掉 `ImUnread` 上的标 ⇒ 1 条红，正是汇总那一段：
+`id 必须出字符串…实际 java.lang.Long 2103893504519475201`。
+第三支是这一轮里唯一"实体打了标就以为完事"会漏掉的位置：未读汇总的 `items` 是
+`ImReadService#unreadSummary` 用 `ImUnread.of(...)` 现装的另一份 DTO，`conversationId` 从
+`ImConversationView` 逐字段抄过来——实体上的注解结构上管不到这个新对象，
+所以这条红只能由 `unread/summary` 的线上形状来钉。
 
 ---
 
@@ -685,6 +724,19 @@ z-opc 前端要改的只有一处（路径都在 `z-opc/bootstraps/z-opc-main-st
 （`z-opc/bootstraps/z-opc-main-starter-frontend/src/msg/`，实测 6 个文件含 dist）里
 `msg/im` **0 命中**。也就是说目前没有任何已知客户端会因为这一条断掉——但它是破坏性的，
 所以只跟着版本号出去，如今是跟着 1.2.0 出去的。
+
+还有一条破坏性的**尚未**跟着版本号出去：IM 的 id 线格式（§6）。它改的是**哪一个**响应，
+先把范围量清楚再写下来，别到时候凭印象补——`z-msg-im` 三个 controller 实测 18 条 POST，
+形状变的有 11 条：`conversation/single|group|list|members|member/add|member/role`、
+`message/send|at|history`（`history` 是 `rows` 里的每一行）、`read/receipts`、`read/summary`
+（`items` 里每一行的 `conversationId`）；形状不变的有 7 条，因为它们回的是标量或只有游标/计数：
+`conversation/leave|mute|clear|member/remove`、`read/mark|unread`、`message/head`。
+字段层面共 16 个注解位（`id` / `conversationId` / `senderUserId` / `ownerUserId` / `lastMsgId` / `userId`）
+加 2 处手工拼的帧载荷，**不动**的是 `seq` / `lastReadSeq` / `myLastReadSeq` / `clearedSeq` /
+`myClearedSeq` / `replyToSeq` / `unreadCount` / `conversationCount` / `total` / `headSeq` /
+`nextSinceSeq` / `minVisibleSeq` / `createdTime`。
+JS 客户端的迁移动作只有一句：把这些 id 当字符串用，别再 `Number()` 一次——
+`Number("2103885891501236225")` 依旧会舍成 `…200`（这条实测过），形状改了而问题没改。
 
 ## 15. 设计参考（GitHub 同类项目）
 

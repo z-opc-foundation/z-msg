@@ -12,6 +12,7 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -458,5 +459,168 @@ public class MsgExampleApplicationTest {
                 String.class);
         assertEquals(401, bogus.getStatusCodeValue(),
                 "没登记过的 tab 号必须按未登录处理: " + bogus.getBody());
+    }
+
+    /**
+     * 演示页那块「私聊（服务端署名）」面板走过的整条路，一次跑完：
+     * 开会话 → 两端订阅 {@code room:<id>} → 发言由服务端署名 → 对面收两次（{@code room:} 与
+     * {@code user:} 各一次，载荷相同）→ 按 {@code (conversationId, seq)} 去重 → 标已读回落到
+     * 对面手里那封 read 帧 → 增量拉历史。
+     * <p>
+     * 为什么要在示例里再测一遍 {@code z-msg-im} 自己那 56 例覆盖过的行为：这一例量的不是 IM 的
+     * 域逻辑，而是**宿主接线**——IM 的自动装配真起来了吗、演示用的 {@code MsgPrincipalResolver}
+     * 解出的身份能不能被成员表认账、{@code room:} 的三态授权在这个宿主里与 {@code room:lobby}
+     * 的放行策略共存吗。IM 模块自己的测试用的是它内置的测试身份源，换宿主就验不到这一层。
+     * <p>
+     * 顺带钉住线格式：id 全链路都是字符串，而且前端"响应里拿到什么就回填什么"这条路真能走通。
+     */
+    @Test
+    public void singleChatPanelPathWorksOnTheDemoHostWithServerSignedIds() {
+        WebSocketHolder a = open(USER_A, "张三");
+        WebSocketHolder b = open(USER_B, "李四");
+
+        JsonNode conv = dataOf(postJson("/api/msg/im/conversation/single", a.sessionHeaders(),
+                body("peerUserId", USER_B)));
+        JsonNode idNode = conv.path("id");
+        assertTrue(idNode.isTextual(),
+                "19 位雪花会话 id 必须出字符串，出数字前端 JSON.parse 就会舍掉末位: " + idNode);
+        String convId = idNode.asText();
+        assertTrue(Long.parseLong(convId) > 9007199254740991L,
+                "这条用例的前提是这个 id 真的超出 JS Number 的 53 bit，否则它证不了什么: " + convId);
+        assertEquals("1001:1002", conv.path("ukPair").asText(), "会话必须是这两个人的一对");
+        String room = "room:" + convId;
+
+        // 两端各自订阅这个会话：成员身份来自 session，不是 query 里自称的 userId
+        assertSubscribed(a, "sub-a", room);
+        assertSubscribed(b, "sub-b", room);
+        // 对照（同一条连接）：非成员的会话照样拒 —— 上面那两条成功不是因为"什么都能订"
+        assertVetoed(b, "sub-x", "room:424242");
+
+        // 发言：载荷里自报一个不属于我的 senderUserId，服务端要按登录身份改写而不是采纳
+        JsonNode sent = dataOf(postJson("/api/msg/im/message/send", a.sessionHeaders(),
+                body("conversationId", convId, "content", "今晚八点上线", "msgType", "TEXT",
+                        "clientMsgId", "demo-1", "senderUserId", 999999L)));
+        assertEquals(1L, sent.path("seq").asLong(), "会话内第一条，seq 从 1 起");
+        assertEquals("1001", text(sent.path("senderUserId")), "落库的发送者必须是登录身份");
+        assertTrue(sent.path("senderUserId").isTextual(), "帧与 REST 的 id 形状要一致: " + sent);
+        assertEquals(convId, text(sent.path("conversationId")), "回填字符串 id 要落进同一个会话");
+
+        // 对面收到两次：room:<会话> 与 user:<对面>，载荷一模一样 —— 这就是前端必须去重的原因
+        JsonNode onRoom = awaitFrame(b.rec, f -> room.equals(f.path("topic").asText())
+                && "chat".equals(f.path("kind").asText()), "B 在 room 上的聊天帧");
+        JsonNode onUser = awaitFrame(b.rec, f -> ("user:" + USER_B).equals(f.path("topic").asText())
+                && "chat".equals(f.path("kind").asText()), "B 在 user: 上的聊天帧");
+        assertEquals("今晚八点上线", payloadOf(onRoom).path("content").asText());
+        assertEquals(convId, text(payloadOf(onRoom).path("conversationId")));
+        assertEquals("1001", text(payloadOf(onRoom).path("senderUserId")), "帧里的署名也是服务端写的");
+        assertEquals(payloadOf(onRoom).path("seq").asLong(), payloadOf(onUser).path("seq").asLong());
+        // 两侧各一次：room:<会话> 与 user:<对面>，载荷相同 —— 这就是前端必须去重的原因
+        assertEquals(1, chatFramesCarrying(b.rec, "今晚八点上线", room),
+                "B 订了会话，room 侧该有一次: " + b.rec.dump());
+        assertEquals(1, chatFramesCarrying(b.rec, "今晚八点上线", "user:" + USER_B),
+                "轻客户端不订 room 也要收得到，所以 user 侧还有一次（合计 2 次，前端按 (会话,seq) 去重）");
+        assertEquals(1, chatFramesCarrying(a.rec, "今晚八点上线", room),
+                "发送者从自己订的 room 收到那一次（多端一致）");
+        assertEquals(0, chatFramesCarrying(a.rec, "今晚八点上线", "user:" + USER_A),
+                "user: 侧的扇出必须排除发送者，否则他自己那条会平白多出一遍: " + a.rec.dump());
+
+        // B 标已读：游标进库，同时 read 帧打到 room: 上给 A 看"对方读到哪"
+        JsonNode mark = dataOf(postJson("/api/msg/im/read/mark", b.sessionHeaders(),
+                body("conversationId", convId, "lastReadSeq", 1)));
+        assertEquals(1L, mark.path("lastReadSeq").asLong());
+        assertEquals(0L, mark.path("unreadCount").asLong(), "读完就该没有未读");
+        JsonNode readFrame = awaitFrame(a.rec, f -> room.equals(f.path("topic").asText())
+                && "read".equals(f.path("kind").asText()), "A 收到的 read 帧");
+        assertEquals("1002", text(payloadOf(readFrame).path("userId")));
+        assertEquals(1L, payloadOf(readFrame).path("lastReadSeq").asLong());
+
+        // 增量同步：sinceSeq=0 一次拉平，四个判定量都在，行里的 id 仍是字符串
+        JsonNode page = dataOf(postJson("/api/msg/im/message/history", b.sessionHeaders(),
+                body("conversationId", convId, "sinceSeq", 0, "size", 50)));
+        assertEquals(1, page.path("rows").size(), "历史里就这一条: " + page);
+        assertEquals(1L, page.path("headSeq").asLong());
+        assertEquals(1L, page.path("nextSinceSeq").asLong());
+        assertTrue(!page.path("hasMore").asBoolean(), "只有 1 条，不该还有更多");
+        assertEquals(1L, page.path("minVisibleSeq").asLong());
+        assertEquals(convId, text(page.path("rows").get(0).path("conversationId")));
+    }
+
+    // ---------------------------------------------------------------- 本用例的小工具
+
+    /** 前端的做法：响应里 id 是字符串，就原样带回去，一个字符都不许多改。 */
+    private static String text(JsonNode node) {
+        assertTrue(node.isTextual(), "这个 id 出线必须是字符串，实际 " + node.getNodeType() + " " + node);
+        return node.asText();
+    }
+
+    private static Map<String, Object> body(Object... kv) {
+        Map<String, Object> m = new LinkedHashMap<String, Object>();
+        for (int i = 0; i + 1 < kv.length; i += 2) {
+            m.put(String.valueOf(kv[i]), kv[i + 1]);
+        }
+        return m;
+    }
+
+    private JsonNode dataOf(ResponseEntity<String> resp) {
+        JsonNode root = read(resp.getBody());
+        assertNotNull(root, "响应不是 JSON（HTTP " + resp.getStatusCodeValue() + "）: " + resp.getBody());
+        assertEquals(200, resp.getStatusCodeValue(), "HTTP 状态: " + resp.getBody());
+        assertTrue(root.path("success").asBoolean(), "业务 code 应为 200: " + resp.getBody());
+        return root.path("data");
+    }
+
+    private ResponseEntity<String> postJson(String path, HttpHeaders headers, Map<String, Object> body) {
+        HttpHeaders h = new HttpHeaders();
+        h.putAll(headers);
+        h.setContentType(MediaType.APPLICATION_JSON);
+        return rest.exchange(path, HttpMethod.POST, new HttpEntity<Object>(body, h), String.class);
+    }
+
+    private void subscribeAndWait(WebSocketHolder who, String clientMsgId, String topic) {
+        Map<String, Object> frame = new LinkedHashMap<String, Object>();
+        frame.put("op", "subscribe");
+        frame.put("clientMsgId", clientMsgId);
+        frame.put("topics", java.util.Collections.singletonList(topic));
+        try {
+            who.session.sendMessage(new TextMessage(JSON.writeValueAsString(frame)));
+        } catch (Exception e) {
+            throw new AssertionError("订阅帧发不出去: " + e, e);
+        }
+    }
+
+    private void assertSubscribed(WebSocketHolder who, String clientMsgId, String topic) {
+        subscribeAndWait(who, clientMsgId, topic);
+        JsonNode ack = awaitFrame(who.rec, f -> "ack".equals(f.path("op").asText())
+                && clientMsgId.equals(f.path("clientMsgId").asText()), clientMsgId + " 的订阅 ack");
+        JsonNode info = payloadOf(ack);
+        boolean got = false;
+        for (JsonNode t : info.path("subscribed")) {
+            if (topic.equals(t.asText())) { got = true; }
+        }
+        assertTrue(got, "订上 " + topic + " 要回在 subscribed 里: " + info);
+    }
+
+    private void assertVetoed(WebSocketHolder who, String clientMsgId, String topic) {
+        subscribeAndWait(who, clientMsgId, topic);
+        JsonNode err = awaitFrame(who.rec, f -> "error".equals(f.path("op").asText())
+                && clientMsgId.equals(f.path("clientMsgId").asText()), clientMsgId + " 的订阅 error");
+        assertEquals("WS_TOPIC_FORBIDDEN", err.path("errorCode").asText(),
+                "非成员订会话必须被成员表拒，实际: " + err);
+        assertTrue(String.valueOf(err.path("errorMessage").asText()).contains(topic),
+                "报错要点名是哪个 topic，否则前端无从判断: " + err);
+    }
+
+    private int chatFramesCarrying(Recorder rec, String content, String topic) {
+        int n = 0;
+        for (String raw : rec.frames) {
+            JsonNode f = read(raw);
+            if (f != null && "message".equals(f.path("op").asText())
+                    && "chat".equals(f.path("kind").asText())
+                    && topic.equals(f.path("topic").asText())
+                    && content.equals(payloadOf(f).path("content").asText())) {
+                n++;
+            }
+        }
+        return n;
     }
 }

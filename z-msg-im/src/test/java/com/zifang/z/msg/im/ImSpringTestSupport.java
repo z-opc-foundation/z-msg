@@ -288,6 +288,22 @@ public abstract class ImSpringTestSupport {
         return ((Number) raw).longValue();
     }
 
+    /**
+     * 取一个 id 字段，并且**要求它在线上是字符串**。
+     * <p>
+     * 不复用 {@link #longOf}：这条断言的全部意义就是"它不是数字"。雪花是 19 位十进制，
+     * 浏览器 {@code JSON.parse} 会把它舍进 double（{@code 2103885891501236225} →
+     * {@code ...200}），前端拿舍过的值去拼 {@code room:<id>} 或回传 REST，症状是
+     * "刚建好的会话 403 无权访问"——而这个 id 在服务端从未存在过。
+     * 哪天有人把 {@code ToStringSerializer} 摘掉，红的是这里，不是前端。
+     */
+    protected static long idOf(Object raw) {
+        assertTrue(raw instanceof String,
+                "id 必须出字符串，出数字就是让前端去舍入 19 位雪花；实际 "
+                        + (raw == null ? "null" : raw.getClass().getName()) + " " + raw);
+        return Long.parseLong((String) raw);
+    }
+
     protected static Map<String, Object> map(Object... kv) {
         Map<String, Object> m = new HashMap<String, Object>();
         for (int i = 0; i + 1 < kv.length; i += 2) {

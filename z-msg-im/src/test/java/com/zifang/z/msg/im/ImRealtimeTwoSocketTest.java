@@ -95,9 +95,9 @@ public class ImRealtimeTwoSocketTest extends ImSpringTestSupport {
                 "帧外层的 seq 必须等于消息的 seq —— 客户端按它做增量补拉");
         assertNotNull(frame.get("ts"));
         Map<String, Object> payload = payloadOf(frame);
-        assertEquals(conv, longOf(payload.get("conversationId")));
-        assertEquals(A, longOf(payload.get("senderUserId")));
-        assertEquals(sent.id, longOf(payload.get("id")));
+        assertEquals(conv, idOf(payload.get("conversationId")));
+        assertEquals(A, idOf(payload.get("senderUserId")));
+        assertEquals(sent.id, idOf(payload.get("id")));
         assertEquals("TEXT", payload.get("msgType"));
         assertNotNull(payload.get("createdTime"), "时间要带，且是 epoch 毫秒而不是 LocalDateTime 结构");
 
@@ -200,7 +200,7 @@ public class ImRealtimeTwoSocketTest extends ImSpringTestSupport {
                 "user: 侧的 DM 帧");
         assertEquals(RealtimeTopics.user(B), frame.get("topic"),
                 "没订房间的连接靠自己的 user: topic 也要能收到单聊");
-        assertEquals(conv, longOf(payloadOf(frame).get("conversationId")));
+        assertEquals(conv, idOf(payloadOf(frame).get("conversationId")));
 
         // 对照一：同一条消息在 room: 上没有别的订阅者，不影响上面这条投递
         // 对照二：另一个人的连接收不到——离线/旁人都不该被这条帧打扰
@@ -258,7 +258,7 @@ public class ImRealtimeTwoSocketTest extends ImSpringTestSupport {
                 f -> RealtimeMessage.KIND_READ.equals(f.get("kind")), "kind=read 的帧");
         assertEquals(topic, frame.get("topic"), "已读回执只进会话，不往个人 topic 上打");
         Map<String, Object> payload = payloadOf(frame);
-        assertEquals(B, longOf(payload.get("userId")), "帧里要点明是谁读到的");
+        assertEquals(B, idOf(payload.get("userId")), "帧里要点明是谁读到的");
         assertEquals(1L, longOf(payload.get("lastReadSeq")));
 
         // 对照 + 负：非成员没订到这条 room，所以这条 read 也与他无关

@@ -78,6 +78,27 @@
   </section>
 </main>
 
+<section class="panel" style="margin:0 12px 12px;">
+  <h2>私聊（服务端署名） <span class="who" id="im-conv">还没开会话</span></h2>
+  <div class="body" id="im" style="min-height:150px;"></div>
+  <div class="hint">上面那块大厅的 <code>from</code> 是客户端自报的；这一块的发言者 id 由服务端写
+    （<code>senderUserId</code> + 会话内 <code>seq</code> 都是落库时定的），走的是
+    <code>z-msg-im</code> 那 18 个端点里的五个：<code>conversation/single</code> →
+    <code>message/send</code> → <code>message/head</code> + <code>message/history</code> →
+    <code>read/mark</code>。单聊同时往 <code>room:&lt;会话&gt;</code> 和对面自己的
+    <code>user:&lt;id&gt;</code> 投两帧，所以这里按 <code>(会话, seq)</code> 去重。</div>
+  <div class="row">
+    <button id="im-open">和对方开私聊</button>
+    <button id="im-sync">按游标补增量</button>
+    <button id="im-read">标已读到最新</button>
+    <span class="who" id="im-state">-</span>
+  </div>
+  <div class="row">
+    <input id="im-text" placeholder="发一条会落库的消息，回车发送" autocomplete="off">
+    <button id="im-send">发送</button>
+  </div>
+</section>
+
 <section class="panel" style="margin:0 12px 14px;">
   <h2>帧日志 <span class="who">收发的原始帧，payload 是 JSON 字符串所以要再解析一次</span></h2>
   <div class="body" id="log" style="min-height:120px;max-height:220px;"></div>
@@ -92,6 +113,11 @@
   var FALLBACK_PING_MS = 20000;
   var me = null, myName = null, ws = null, seq = 0, connSeq = 0;
   var pending = {};   // clientMsgId -> 气泡元素，等服务端原样回带 clientMsgId 来对号
+  var ackHandlers = {}; // clientMsgId -> 一次性回调，用于 subscribe 这类"要等这一条的回帧"的帧
+  // 私聊这一路的状态：会话 id、它的 room topic、本地已见游标、以及 (会话:seq) 去重表。
+  // 去重表是必需的而不是锦上添花：单聊同一帧会既走 room:<会话> 又走对面自己的 user:<id>。
+  var im = { convId: null, topic: null, cursor: 0, seen: {} };
+  var NAMES = { 1001: '张三', 1002: '李四' };
 
   // 一个浏览器只有一个 cookie jar，两个标签页带的是同一个 JSESSIONID —— 只用 cookie 的话
   // 标签 2 登录会把标签 1 的身份改掉，"开两个标签页分别当张三李四"就成了假话。
@@ -109,6 +135,14 @@
   })();
 
   function other() { return String(me) === '1001' ? '1002' : '1001'; }
+
+  // 演示只有两个身份，名字就写死在这儿；真实前端该拿服务端给的名字。
+  // 关键是私聊气泡上的这个名字来自载荷里的 senderUserId（服务端落库时写的），
+  // 而不是大厅那种客户端自报的 from。
+  function nameOf(id) {
+    var s = String(id);
+    return NAMES[s] ? NAMES[s] : ('用户' + s);
+  }
 
   var $ = function (id) { return document.getElementById(id); };
 
@@ -214,7 +248,143 @@
     });
   }
 
+  // ---------- 私聊（z-msg-im）----------
+
+  function imBubble(name, text, mine, seqNo) {
+    var el = document.createElement('div');
+    el.className = 'bubble' + (mine ? ' me' : '');
+    var n = document.createElement('span');
+    n.className = 'name';
+    // seq 直接印在名字旁边：这是服务端在同会话里 CAS 分配的严格递增水位，
+    // 客户端拿它当增量游标，而不是靠到达顺序自己编号。
+    n.textContent = name + (seqNo === undefined || seqNo === null ? '' : ' · seq ' + seqNo);
+    var body = document.createElement('span');
+    body.textContent = text;   // 一律 textContent，载荷里的标签只当字面量
+    el.appendChild(n);
+    el.appendChild(body);
+    $('im').appendChild(el);
+    $('im').scrollTop = $('im').scrollHeight;
+    return el;
+  }
+
+  /** 收/拉来的一条 IM 消息：按 (会话, seq) 去重后画出来，并把本地游标推上去。 */
+  function imRender(row) {
+    if (!row || row.conversationId === undefined) { return false; }
+    var key = row.conversationId + ':' + row.seq;
+    if (im.seen[key]) { return false; }
+    im.seen[key] = true;
+    if (Number(row.seq) > im.cursor) { im.cursor = Number(row.seq); }
+    imBubble(nameOf(row.senderUserId), String(row.content || ''),
+             String(row.senderUserId) === String(me), row.seq);
+    return true;
+  }
+
+  function imState(text) { $('im-state').textContent = text; }
+
+  function imReset() {
+    im.convId = null; im.topic = null; im.cursor = 0; im.seen = {};
+    $('im').textContent = '';
+    $('im-conv').textContent = '还没开会话';
+    $('im-state').textContent = '-';
+  }
+
+  function imOpen() {
+    if (!me) { toast('先点上面的 1001 或 1002 登录'); return; }
+    api('/api/msg/im/conversation/single', 'POST', { peerUserId: Number(other()) }).then(function (res) {
+      if (!res || !res.success) { toast('开会话失败：' + ((res && res.message) || '')); return; }
+      imReset();
+      im.convId = res.data.id;
+      im.topic = 'room:' + res.data.id;
+      $('im-conv').textContent = '会话 ' + im.convId + '（' + nameOf(me) + ' ↔ ' + nameOf(other()) +
+        '，convType=' + res.data.convType + '，同对端再点一次还是这一个）';
+      imSubscribe();
+    });
+  }
+
+  /**
+   * 订 room:<会话>。这一步是"三态授权"的可见证据：默认策略对 room 一律不表态，
+   * 是 z-msg-im 按成员表放行的——所以没开会话（还不是成员）时订它会吃到
+   * WS_TOPIC_FORBIDDEN，而刚 single() 完的那条连接立刻就能订上。
+   */
+  function imSubscribe() {
+    if (!ws || ws.readyState !== 1) { toast('还没连上，订不了 room'); return; }
+    var cid = 'sub' + (++seq);
+    ackHandlers[cid] = function (payload, isError) {
+      if (isError) { imState('订阅 ' + im.topic + ' 被拒：' + payload.errorCode + ' ' + payload.errorMessage); return; }
+      var got = (payload.subscribed || []).indexOf(im.topic) >= 0;
+      imState((got ? '已订上 ' : '没订上（回帧里没有它）') + im.topic +
+        '；当前连接挂着 ' + (payload.topics || []).length + ' 条 topic');
+    };
+    sendFrame({ op: 'subscribe', clientMsgId: cid, topics: [im.topic] });
+  }
+
+  function imSend() {
+    var v = $('im-text').value.trim();
+    if (!im.convId) { toast('先点「和对方开私聊」'); return; }
+    if (!v) { return; }
+    if (!me) { toast('先登录'); return; }
+    var clientMsgId = 'im' + (++seq);
+    api('/api/msg/im/message/send', 'POST', {
+      conversationId: im.convId, msgType: 'text', content: v, clientMsgId: clientMsgId
+    }).then(function (res) {
+      if (!res || !res.success) { toast('发送失败：' + ((res && res.message) || '')); return; }
+      // 发出去的那条立刻自己画一遍（载荷用服务端返回的，seq/senderUserId 都是它写的）；
+      // 随后同一条还会从 room: 帧回来，被 (会话, seq) 去重表挡掉。
+      imRender(res.data);
+      imState('已落库 seq=' + res.data.seq + '，senderUserId=' + res.data.senderUserId +
+        '（服务端写的，不是帧里自报的）');
+      $('im-text').value = '';
+    });
+  }
+
+  /** 把游标之后的补齐：head 给水位，history 给"还有没有 / 下次从几开始 / 少掉那段是不是被自己挡的"。 */
+  function imSync() {
+    if (!im.convId) { toast('先开会话'); return; }
+    var from = im.cursor;
+    api('/api/msg/im/message/head', 'POST', { conversationId: im.convId }).then(function (h) {
+      var head = (h && h.success) ? h.data : null;
+      return api('/api/msg/im/message/history', 'POST',
+        { conversationId: im.convId, sinceSeq: from, size: 50 }).then(function (res) {
+        if (!res || !res.success) { toast('拉增量失败：' + ((res && res.message) || '')); return; }
+        var p = res.data || {};
+        var rows = p.rows || [];
+        var painted = 0;
+        for (var i = 0; i < rows.length; i++) { if (imRender(rows[i])) { painted++; } }
+        imState('游标 ' + from + ' → ' + im.cursor + '：补了 ' + painted + '/' + rows.length +
+          ' 条 · hasMore=' + p.hasMore + ' · nextSinceSeq=' + p.nextSinceSeq +
+          ' · headSeq=' + p.headSeq + ' · minVisibleSeq=' + p.minVisibleSeq +
+          ' · /head=' + head);
+      });
+    });
+  }
+
+  function imMarkRead() {
+    if (!im.convId) { toast('先开会话'); return; }
+    api('/api/msg/im/read/mark', 'POST', { conversationId: im.convId, lastReadSeq: im.cursor })
+      .then(function (res) {
+        if (!res || !res.success) { toast('标已读失败：' + ((res && res.message) || '')); return; }
+        imState('已读到 seq=' + res.data.lastReadSeq + '，本会话未读 ' + res.data.unreadCount +
+          '（对面那条连接会收到 kind=read 帧）');
+      });
+  }
+
   // ---------- WebSocket ----------
+
+  function sendFrame(frame) {
+    if (!ws || ws.readyState !== 1) { toast('连接不在，帧发不出去'); return false; }
+    log('→ ' + JSON.stringify(frame));
+    ws.send(JSON.stringify(frame));
+    return true;
+  }
+
+  /** 一次性回调：服务端按 clientMsgId 原样回带 ack/error，取到就摘掉，不让它跨连接复活。 */
+  function resolveAck(clientMsgId, payload, isError) {
+    if (!clientMsgId) { return; }
+    var h = ackHandlers[clientMsgId];
+    if (!h) { return; }
+    delete ackHandlers[clientMsgId];
+    h(payload, isError);
+  }
 
   function connect() {
     return api('/api/msg/inbox/ws-token').then(function (res) {
@@ -298,11 +468,24 @@
         startHeartbeat(sock, heartbeatMs(info.limits));
       } else if (f.op === 'message' && f.kind === 'chat') {
         var chat = JSON.parse(f.payload);
+        // IM 的帧和大厅的帧同为 kind=chat，靠载荷形状分家：落库的那条一定带
+        // conversationId + senderUserId（都是服务端写的），大厅那条只有客户端自报的 from/userId。
+        if (chat.conversationId !== undefined && chat.senderUserId !== undefined) {
+          // 只画当前面板这个会话的：字符串 id 逐字符比才是可靠的，数字比会被前端舍入（见 001_WS_PROTOCOL §2）
+          if (String(chat.conversationId) !== String(im.convId)) { return; }
+          imRender(chat);
+          return;
+        }
         // 自己发的那条服务端会原样回给包括自己在内的所有订阅者（含本人），
         // 所以这里要按载荷里的 userId 去重，否则每个气泡会画两遍；
         // "送达"状态由 ack 帧带 clientMsgId 回来时更新（见 markSent）
         if (String(chat.userId) === String(me)) { return; }
         bubble(String(chat.from || '匿名'), String(chat.text || ''), false);
+      } else if (f.op === 'message' && f.kind === 'read') {
+        var rd = JSON.parse(f.payload);
+        if (String(rd.userId) !== String(me)) {
+          $('im-state').textContent = '对方已读到 seq=' + rd.lastReadSeq + '（read 帧，走的是 room）';
+        }
       } else if (f.op === 'message' && f.kind === 'inbox') {
         var mail = JSON.parse(f.payload);
         toast('站内信：' + (mail.title || ''));
@@ -310,8 +493,10 @@
       } else if (f.op === 'ack') {
         var payload = f.payload ? JSON.parse(f.payload) : {};
         if (f.clientMsgId && payload.delivered !== undefined) { markSent(f.clientMsgId, payload.delivered); }
+        resolveAck(f.clientMsgId, payload, false);
       } else if (f.op === 'error') {
         toast(f.errorCode + '：' + f.errorMessage);
+        resolveAck(f.clientMsgId, { errorCode: f.errorCode, errorMessage: f.errorMessage }, true);
       }
     };
   }
@@ -334,6 +519,9 @@
       $('u1001').classList.toggle('on', String(me) === '1001');
       $('u1002').classList.toggle('on', String(me) === '1002');
       $('chat').textContent = ''; $('inbox').textContent = '';
+      // 换身份 = 换了一条连接，room 订阅不会跟着过来（服务端没有"这个用户该有哪些频道"的
+      // 可枚举清单，只有身份派生的收件箱会自动订上），所以这里把私聊状态清空、让用户重开一次。
+      imReset();
       refreshUnread(); refreshInbox(); connect();
     });
   }
@@ -359,6 +547,11 @@
   $('text').addEventListener('keydown', function (e) { if (e.key === 'Enter') { $('send').click(); } });
   $('notify-me').onclick = function () { notify(null); };
   $('notify-other').onclick = function () { notify(other()); };
+  $('im-open').onclick = imOpen;
+  $('im-send').onclick = imSend;
+  $('im-sync').onclick = imSync;
+  $('im-read').onclick = imMarkRead;
+  $('im-text').addEventListener('keydown', function (e) { if (e.key === 'Enter') { $('im-send').click(); } });
 })();
 </script>
 </body>

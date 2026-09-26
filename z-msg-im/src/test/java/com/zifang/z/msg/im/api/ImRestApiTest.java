@@ -80,7 +80,7 @@ public class ImRestApiTest extends ImSpringTestSupport {
                 json(map("peerUserId", B, "userId", OUTSIDER, "operatorUserId", OUTSIDER)));
         assertOk(resp);
         Map<String, Object> data = dataMap(resp);
-        Long conv = longOf(data.get("id"));
+        Long conv = idOf(data.get("id"));
         assertTrue(conversationService.isMember(conv, A) && conversationService.isMember(conv, B),
                 "会话属于 header 里的 A 和 body 里的 peer: " + data);
         assertFalse(conversationService.isMember(conv, OUTSIDER), "自报的 userId 不能把人塞进成员表");
@@ -91,7 +91,7 @@ public class ImRestApiTest extends ImSpringTestSupport {
                 json(map("conversationId", conv, "content", "自报发送者", "senderUserId", OUTSIDER)));
         assertOk(send, "自报字段只是被忽略，不能把合法请求打断");
         Map<String, Object> msg = dataMap(send);
-        assertEquals(A, longOf(msg.get("senderUserId")), "落库的发送者必须是登录身份");
+        assertEquals(A, idOf(msg.get("senderUserId")), "落库的发送者必须是登录身份");
         assertEquals(1L, longOf(msg.get("seq")));
 
         // 对照：换一个真正不是成员的人拿同一个 body 去发，就要被拒
@@ -102,19 +102,73 @@ public class ImRestApiTest extends ImSpringTestSupport {
 
     // ---------------------------------------------------------------- 金路
 
+    /**
+     * 前端唯一能走的那条路：把响应里**字符串形状**的会话 id 原样回填进下一个请求。
+     * <p>
+     * 为什么单独钉一条：会话 id 是 19 位雪花，超出 JS Number 的 53 bit 安全范围，
+     * 浏览器 {@code JSON.parse} 会把 {@code ...225} 读成 {@code ...200}。如果 id 出的是数字，
+     * 前端"照着文档做"（拿返回值再发一次）就会撞上 {@code 403 无权访问会话 <一个不存在的 id>}，
+     * 而这条会话刚刚才由同一个前端创建成功——现象和权限 bug 一模一样，排查方向从一开始就是错的。
+     * 出字符串之后，前端不需要知道这件事存在，也就没有"要记得用 BigInt"这种隐藏要求。
+     * <p>
+     * 摘掉实体上的 {@code @JsonSerialize(using = ToStringSerializer.class)} 会红在这里
+     * （{@link #idOf} 判形状 + 下面那句逐字符比对判往返）。
+     */
+    @Test
+    public void conversationIdSurvivesAJavaScriptStyleRoundTrip() {
+        ResponseEntity<String> opened = postJson(CONV + "/single", A, json(map("peerUserId", B)));
+        assertOk(opened, "开单聊");
+        Map<String, Object> data = dataMap(opened);
+        Object rawId = data.get("id");
+        assertTrue(rawId instanceof String,
+                "19 位雪花出成数字就等于交给 JS 的 double 去舍入；实际线上形状是 "
+                        + rawId.getClass().getName() + "，整份响应: " + opened.getBody());
+        String idText = (String) rawId;
+        assertTrue(Long.parseLong(idText) > 9007199254740991L,
+                "这条测试的前提是这个 id 真的超出 2^53——否则它证不了什么: " + idText);
+        assertTrue(opened.getBody().contains("\"id\":\"" + idText + '"'),
+                "响应体里 id 必须带引号（前端 JSON.parse 之后仍是原值）: " + opened.getBody());
+
+        // 前端拿到什么就回填什么：一个字符都不许多改
+        ResponseEntity<String> sent = postJson(MSG + "/send", A,
+                json(map("conversationId", idText, "content", "字符串形状也能发消息")));
+        assertOk(sent, "回填字符串 id 发消息");
+        Map<String, Object> msg = dataMap(sent);
+        assertEquals(idText, String.valueOf(msg.get("conversationId")),
+                "落库行的会话 id 必须与前端手里的那串逐字符相同");
+        assertEquals(1L, longOf(msg.get("seq")), "这条消息落进刚建的那个会话，seq 从 1 起");
+
+        // 连订阅的 topic 名也是同一串字符：room:<id> 拼错一位就是 WS_TOPIC_FORBIDDEN
+        ResponseEntity<String> hist = postJson(MSG + "/history", A,
+                json(map("conversationId", idText, "sinceSeq", 0, "size", 10)));
+        assertOk(hist, "回填字符串 id 拉历史");
+        List<Object> rows = rows(dataMap(hist));
+        assertEquals(1, rows.size(), "历史里就该有刚刚那一条: " + hist.getBody());
+        assertEquals(idText, String.valueOf(((Map<?, ?>) rows.get(0)).get("conversationId")));
+
+        // 未读汇总走的是另一个 DTO（ImUnread）与另一个服务（ImReadService），
+        // 实体上打的标管不到它——所以这一条单独钉：换一个 DTO 出线也不能退回数字形状。
+        ResponseEntity<String> summary = postJson(READ + "/summary", A, "{}");
+        assertOk(summary, "未读汇总");
+        List<?> items = (List<?>) dataMap(summary).get("items");
+        assertEquals(1, items.size(), "A 此刻只在一个会话里: " + summary.getBody());
+        assertEquals(idText, String.valueOf(idOf(((Map<?, ?>) items.get(0)).get("conversationId"))),
+                "汇总里的会话 id 必须是同一串字符，不能被第二个 DTO 舍入");
+    }
+
     @Test
     public void conversationAndMessageFlowOverHttp() {
         // 1. 开单聊（对端也开一次，必须是同一条）
         Map<String, Object> dm = dataMap(postJson(CONV + "/single", A, json(map("peerUserId", B))));
-        Long dmConv = longOf(dm.get("id"));
+        Long dmConv = idOf(dm.get("id"));
         assertEquals("SINGLE", dm.get("convType"));
         Map<String, Object> sameAsPeer = dataMap(postJson(CONV + "/single", B, json(map("peerUserId", A))));
-        assertEquals(dmConv, longOf(sameAsPeer.get("id")), "两个人各点一次必须落到同一个会话");
+        assertEquals(dmConv, idOf(sameAsPeer.get("id")), "两个人各点一次必须落到同一个会话");
 
         // 2. 建群 + 成员与角色
         Map<String, Object> group = dataMap(postJson(CONV + "/group", A, json(map(
                 "title", "REST 测试群", "memberUserIds", Arrays.asList(B, OUTSIDER)))));
-        Long gc = longOf(group.get("id"));
+        Long gc = idOf(group.get("id"));
         assertEquals("GROUP", group.get("convType"));
         assertEquals(3L, longOf(group.get("memberCount")));
 
@@ -182,7 +236,7 @@ public class ImRestApiTest extends ImSpringTestSupport {
 
         List<Object> receipts = dataOf(postJson(READ + "/receipts", A, json(map("conversationId", gc))));
         assertEquals(1, receipts.size(), "只有 B 标过已读");
-        assertEquals(B, longOf(((Map<?, ?>) receipts.get(0)).get("userId")));
+        assertEquals(B, idOf(((Map<?, ?>) receipts.get(0)).get("userId")));
         assertEquals(2L, longOf(((Map<?, ?>) receipts.get(0)).get("lastReadSeq")));
 
         Map<String, Object> summary = dataMap(postJson(READ + "/summary", A, "{}"));
@@ -229,13 +283,13 @@ public class ImRestApiTest extends ImSpringTestSupport {
         List<Object> records = (List<Object>) first.get("records");
         assertEquals(1, records.size(), "size=1 只该给一条");
         assertEquals(2L, longOf(first.get("total")), "total 是总数，不是本页条数");
-        assertEquals(c2, longOf(((Map<?, ?>) records.get(0)).get("conversationId")), "最新的在前");
+        assertEquals(c2, idOf(((Map<?, ?>) records.get(0)).get("conversationId")), "最新的在前");
         assertNotNull(((Map<?, ?>) records.get(0)).get("lastMsgPreview"));
 
         Map<String, Object> second = dataMap(postJson(CONV + "/list", A, json(map("page", 2, "size", 1))));
         List<Object> secondRecords = (List<Object>) second.get("records");
         assertEquals(1, secondRecords.size());
-        assertEquals(c1, longOf(((Map<?, ?>) secondRecords.get(0)).get("conversationId")),
+        assertEquals(c1, idOf(((Map<?, ?>) secondRecords.get(0)).get("conversationId")),
                 "page 是 1 起的：第二页拿到另一条");
     }
 
@@ -351,7 +405,7 @@ public class ImRestApiTest extends ImSpringTestSupport {
     private static Map<?, ?> firstMember(List<Object> rows, Long userId) {
         for (Object o : rows) {
             Map<?, ?> m = (Map<?, ?>) o;
-            if (userId.equals(Long.valueOf(longOf(m.get("userId"))))) {
+            if (userId.equals(Long.valueOf(idOf(m.get("userId"))))) {
                 return m;
             }
         }
@@ -360,7 +414,7 @@ public class ImRestApiTest extends ImSpringTestSupport {
 
     private static String roleOf(Object memberRow, Long userId) {
         Map<?, ?> m = (Map<?, ?>) memberRow;
-        assertEquals(userId, Long.valueOf(longOf(m.get("userId"))), "这一行不是要找的人: " + m);
+        assertEquals(userId, Long.valueOf(idOf(m.get("userId"))), "这一行不是要找的人: " + m);
         return String.valueOf(m.get("role"));
     }
 }

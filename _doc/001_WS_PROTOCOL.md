@@ -153,10 +153,54 @@ GET /api/msg/inbox/ws-token            （身份取自宿主自己的登录态�
 站内信（`kind=inbox`）的 payload 字段：
 `id`、`msgId`、`eventType`、`msgType`、`title`、`content`、`linkUrl`、`priority`、
 `createdTime`、`unread=true`。前端拿 `id` 去 `/api/msg/inbox/read?id=` 标已读。
+`z_msg_message.id` 是自增主键，位数远小于 2^53，所以这一族的 `id` 出的是数字。
+
+### IM 的 `kind=chat` / `kind=read`：id 一律字符串
+
+`z-msg-im` 落库后的帧（`ImMessageService#payloadOf`）：
+
+| 字段 | 线上形状 | 为什么 |
+| --- | --- | --- |
+| `id`、`conversationId`、`senderUserId` | **字符串** | 19 位雪花超出 JS Number 的 53 bit，见下面那段 |
+| `seq` | 数字 | 会话内从 1 起的游标，客户端要拿它做加减与比较 |
+| `msgType`、`content` | 字符串 | `TEXT` / `IMAGE` / `FILE` / `AUDIO` / `SYS` |
+| `clientMsgId`、`atUserIds`、`replyToSeq` | 有值才出现 | `atUserIds` 是升序逗号分隔的**字符串**，不是 JSON 数组 |
+| `createdTime` | 数字 | epoch 毫秒 |
+
+`kind=read`（`publishReadFrame`，走 `room:`）：`conversationId`、`userId` 字符串，
+`lastReadSeq` 数字。
+
+**为什么 id 出字符串而不是数字**：会话/消息 id 是 19 位十进制雪花，而 JS 的 `Number`
+只有 53 bit（安全上界 `9007199254740991`，16 位）。浏览器 `JSON.parse` 会当场把
+`2103885891501236225` 舍成 `2103885891501236200`——前端拿着这个数去拼 `room:<id>`
+或回填 `/api/msg/im/message/send`，症状是 **`403 无权访问会话 <一个服务端从未存在过的 id>`**，
+而这条会话是一秒前它自己刚建起来的。现象与权限配置错一模一样，排查方向从一开始就是错的，
+所以正确性必须由服务端在线上形状上保证，而不是写在文档里要求前端"记得用 BigInt"。
+REST 侧同理：`@JsonSerialize(using = ToStringSerializer.class)` 只钉在 id 字段，
+不靠宿主的 Jackson 全局开关（那条开关的范围是整个应用的响应体）。钉的位置是 6 个类共 16 个字段
+（四张表的实体 + 会话视图 `ImConversationView` + 未读汇总 `ImUnread`）加两处手工拼的帧载荷，
+**不是"给实体打了标就完事"**：`ImUnread` 是 `ImReadService#unreadSummary` 用 `ImUnread.of(...)`
+现装的另一份 DTO，实体上的注解结构上覆盖不到它，只有 `unread/summary` 的线上形状能钉住它。
+
+两个由这条形状带来的便利：`atUserIds` 与 `room:` 的标识部分本来就是字符串，
+拼 topic 时**直接用手里的字符串**，一位都不会错。
+
+单聊默认同时投两条 topic（`room:<会话>` 与 `user:<对面那一位>`，见
+`z-msg.im.user-side-push`），两条帧的 payload 完全相同 —— **客户端按
+`conversationId + seq` 去重**，否则会画两个气泡；`z-msg-example` 的私聊面板就是这么做的。
+
+> **这条形状是主干改动，不在任何已发布构件里**：1.2.0 及以前 IM 的 id 在 REST 与实时帧上
+> 都是数字。改动破坏线格式（对按数字读的客户端），因此不能反向移植进 1.2.0；
+> 钉住它的是 `ImSpringTestSupport#idOf`（判"必须是字符串"）与
+> `ImRestApiTest#conversationIdSurvivesAJavaScriptStyleRoundTrip`（判前端"拿到什么回填什么"这条
+> 自然路径真的走得通）。三支变异都验过有牙、按 `md5` 逐字节还原：摘实体标 ⇒ 3 条 REST 红，
+> 把帧载荷的 `asText()` 换回裸 `Long` ⇒ 2 条帧断言红，摘 `ImUnread` 的标 ⇒ 汇总那 1 条红
+> （读数与还原记录见 `README.md` §13）。`seq` 一类游标字段仍是数字，别顺手一起改。
 
 ## 3. topic 命名
 
-`RealtimeTopics`：`前缀:标识`，标识内不允许再出现冒号（按第一个冒号切分）。
+`RealtimeTopics`：`前缀:标识`，解析一律按第一个冒号切分。除 `biz:` 天生带一段分组
+（`biz:<group>:<key>`，此时 `keyOf` 会带回整段 `group:key`）之外，标识内不允许再出现冒号。
 
 | 前缀 | 含义 | 默认谁能订 |
 | --- | --- | --- |

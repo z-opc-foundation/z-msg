@@ -3,6 +3,8 @@ package com.zifang.z.msg.im.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.fasterxml.jackson.databind.annotation.JsonSerialize;
+import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
 import java.time.LocalDateTime;
 
@@ -16,6 +18,8 @@ import java.time.LocalDateTime;
 public class ImConversationDO {
 
     @TableId(type = IdType.ASSIGN_ID)
+    // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
     /**
      * SINGLE / GROUP / ROOM，取值见 {@link com.zifang.z.msg.im.domain.model.ImConvTypes}
@@ -24,8 +28,12 @@ public class ImConversationDO {
     private String tenantCode;
     private String title;
     private String avatar;
+    // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long ownerUserId;
     private Long lastMsgSeq;
+    // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @JsonSerialize(using = ToStringSerializer.class)
     private Long lastMsgId;
     private String lastMsgPreview;
     private Integer memberCount;
