@@ -48,11 +48,6 @@
         <tag>HEAD</tag>
     </scm>
 
-    <properties>
-        <z-boot.version>1.0.17</z-boot.version>
-        <z-util.version>1.0.13</z-util.version>
-    </properties>
-
     <dependencies>
         <!-- 内部 module: z-msg-core（版本由父 dependencyManagement 锁） -->
         <dependency>
@@ -60,25 +55,25 @@
             <artifactId>z-msg-core</artifactId>
         </dependency>
 
-        <!-- 内部工具 -->
+        <!-- 内部工具：版本由 fleet 按坐标下发（1.0.13，与迁移前 z-util.version 同值）。
+             log4j-slf4j2-impl 的 exclusion 是实现选择，跟着声明点走（理由见 z-msg-core 同名注释）。 -->
         <dependency>
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-util-core</artifactId>
-            <version>${z-util.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j2-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
-        <!-- z-boot: BOM 锁版本, starter 提供默认配置 -->
-        <dependency>
-            <groupId>io.github.yuku123</groupId>
-            <artifactId>z-boot-dependencies</artifactId>
-            <version>${z-boot.version}</version>
-            <type>pom</type>
-            <scope>import</scope>
-        </dependency>
+        <!-- z-boot starter：版本由 parent 按坐标下发（1.0.19，原 z-boot.version=1.0.17）；
+             原先写在 <dependencies> 里的 z-boot-dependencies import（scope=import 在这里是空转）删掉，
+             地板由 parent 继承。 -->
         <dependency>
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-boot-web-starter</artifactId>
-            <version>${z-boot.version}</version>
         </dependency>
 
         <!-- Spring Boot Mail (web 层支持 SmtpEmailSender) -->

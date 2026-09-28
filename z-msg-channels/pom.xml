@@ -60,7 +60,15 @@
         <dependency>
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-util-core</artifactId>
-            <version>${z-util.version}</version>
+            <!-- 版本由 fleet 按坐标下发（1.0.13，与迁移前 z-util.version 同值）；
+                 exclusion 是实现选择（log4j-slf4j2-impl 与本仓 log4j-slf4j-impl 同包名冲突），
+                 跟着声明点走，理由见 z-msg-core 同名注释。 -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j2-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>

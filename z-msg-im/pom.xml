@@ -67,15 +67,22 @@
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-msg-web</artifactId>
         </dependency>
+        <!-- 版本由 fleet 按坐标下发（z-util-core 1.0.13，与迁移前 z-util.version 同值）；
+             log4j-slf4j2-impl 的 exclusion 是实现选择，跟着声明点走（理由见 z-msg-core 同名注释）。 -->
         <dependency>
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-util-core</artifactId>
-            <version>${z-util.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j2-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
+        <!-- 版本由 parent 按坐标下发（z-boot-datasource-starter 1.0.19，原 z-boot.version=1.0.17）。 -->
         <dependency>
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-boot-datasource-starter</artifactId>
-            <version>${z-boot.version}</version>
         </dependency>
 
         <dependency>

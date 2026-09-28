@@ -107,6 +107,11 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <!-- 本仓的 spring-boot.version 键已随迁移删掉（父链面值同为 2.7.18，
+                     z-boot-parent/pom.xml:66），这一格现在由 parent 的 properties + pluginManagement
+                     供；引用点留着：parent 的 pluginManagement 只管版本，而本模块的
+                     <mainClass> 配置必须有自己的这一段 <configuration>，写清版本也让
+                     central_pom_scan 的 E 类（只看本仓 pom 链）保持绿。 -->
                 <version>${spring-boot.version}</version>
                 <configuration>
                     <mainClass>com.zifang.z.msg.example.MsgExampleApplication</mainClass>

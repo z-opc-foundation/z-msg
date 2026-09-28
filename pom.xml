@@ -5,8 +5,9 @@
     <modelVersion>4.0.0</modelVersion>
 
     <!--
-        z-msg 自包含 parent — 不依赖 monorepo 内部 parent,
-        改造为 io.github.yuku123 namespace (Maven Central 命名空间).
+        z-msg 对外发布仍是自包含 pom（下面 flatten oss 会把 parent 剥掉），
+        但**构建口径**统一挂到 io.github.yuku123:z-boot-parent 上（见 <parent> 那段的注释）——
+        不再依赖 monorepo 内部 parent，也不再自己养版本属性表。
         使用 ${revision} (CI-friendly versions) + flatten-maven-plugin 发版自动替换.
 
         模块结构:
@@ -21,6 +22,20 @@
           - z-msg-example      : 五分钟聊天室 + 站内信 demo, 不发中央仓库
         注: z-msg-spring-boot-starter 已下沉到 z-boot/z-boot-middleware-starters
     -->
+    <!-- 消费入口统一走 z-boot-parent（1.0.19 起全组织口径，试点是 z-cache）：一行 parent 白拿
+         第三方地板 z-boot-dependencies:1.0.19（156 条）+ 兄弟仓版本权威 z-boot-fleet:1.0.0（163 条）
+         + Java 8 的 pluginManagement。迁移前本仓**没有 parent**，自家 <properties> 里养着
+         spring-boot.version / log4j2.version / slf4j.version / z-boot.version / z-util.version
+         五格版本表，另外每个模块再 import 一次 z-boot-dependencies 当 BOM 用（core/web 还把那条
+         import 写在 <dependencies> 而不是 <dependencyManagement> 里 —— 那里 scope=import 是空转的）。
+         relativePath 必须留空：parent 不在磁盘上，在 repo1。 -->
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-boot-parent</artifactId>
+        <version>1.0.19</version>
+        <relativePath/>
+    </parent>
+
     <groupId>io.github.yuku123</groupId>
     <artifactId>z-msg</artifactId>
     <version>${revision}</version>
@@ -74,53 +89,56 @@
         <!-- CI-friendly 版本根 (发版改这一处即可) -->
         <revision>1.2.1</revision>
 
-        <maven.compiler.source>8</maven.compiler.source>
-        <maven.compiler.target>8</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <!-- 版本口径全部由 parent 下发。2026-09-29 迁移删掉的键逐条按**坐标**对过
+             （parent_preflight.py 对 z-msg 报的第 2/5 节）：
+               maven.compiler.source/target=8、project.build.sourceEncoding=UTF-8
+                   → 父链面值逐字相同（z-boot-parent/pom.xml:56-58 就是 8 / 8 / UTF-8）；
+               spring-boot.version=2.7.18
+                   → 父链同值（z-boot-parent/pom.xml:66），且地板 import spring-boot-dependencies
+                     时用的就是这一格；
+               flatten-maven-plugin.version=1.7.3
+                   → 父链同值。键删了但插件声明里的 <version> 引用点留着：parent 那条 flatten 是
+                     <inherited>false</inherited>（z-boot-parent/pom.xml:261），不下发插件声明，
+                     本仓必须自己常开 flatten（发布形状见下面 build 段的注释）；
+               z-util.version=1.0.13
+                   → 键名父链没有，但 fleet 按坐标管着 z-util-core/-aop/-dsl/-parser-json，
+                     面值同为 1.0.13 ⇒ 该删（README 陷阱 3：判"供不供"按坐标不按键名）；
+               z-boot.version=1.0.17
+                   → parent 按坐标供 z-boot-web-starter / z-boot-datasource-starter 1.0.19
+                     （z-boot 自家 starter 只能和 z-boot 同版本发行），留 1.0.17 就是"各仓再钉一遍"
+                     的旧账 —— 这一格是刻意跟随，实测 tree 里两行 1.0.17→1.0.19，两版都带
+                     spring-boot-starter-log4j2 2.7.18（repo1 回读两侧 pom 逐字对过），实现没换味；
+               slf4j.version=1.7.36
+                   → 全仓 8 个 pom 现读 **0 处引用**（连注释都没写过它），是个纯死键；slf4j-api 的
+                     面值本来由地板 import 的 spring-boot-dependencies 给（两侧同为 1.7.36，
+                     tree 一行没动）。删。
 
-        <!-- 第三方版本 -->
-        <!-- 2026-09-28「同坐标单版本」：2.7.12 → 2.7.18（2.7 线最后一版，Java 8 可用），
-             与 z-boot-dependencies 1.0.18 / z-opc 根 pom 同一口径；12→18 含 CVE 修复，纯上行。 -->
-        <spring-boot.version>2.7.18</spring-boot.version>
+             必须留着的两类：
+               log4j2.version=2.20.0 —— 与地板**不同值**（地板 2.25.4），是刻意的零漂移选择，
+                   删掉就是悄悄把本仓的日志实现换成另一版；见下面 DM 那四条直接条目。
+               maven-enforcer-plugin.version=3.4.1、central-publishing-maven-plugin.version=0.7.0
+                   —— 父链的 pluginManagement 只管 compiler/surefire/failsafe/jar/resources/
+                     spring-boot 六件，这两件父链不供，删键当场悬空。 -->
         <log4j2.version>2.20.0</log4j2.version>
-        <slf4j.version>1.7.36</slf4j.version>
-
-        <!-- 内部依赖 -->
-        <z-boot.version>1.0.17</z-boot.version>
-        <z-util.version>1.0.13</z-util.version>
-
-        <!-- Maven 插件版本 -->
-        <flatten-maven-plugin.version>1.7.3</flatten-maven-plugin.version>
         <maven-enforcer-plugin.version>3.4.1</maven-enforcer-plugin.version>
         <central-publishing-maven-plugin.version>0.7.0</central-publishing-maven-plugin.version>
     </properties>
 
     <dependencyManagement>
         <dependencies>
-            <!-- Log4j2 BOM 必须排在 spring-boot-dependencies 之前：
-                 多个 import BOM 冲突时 Maven 取"先声明者"，而 ${log4j2.version} 属性覆写
-                 只对 parent 生效、对 import 进来的 BOM 无效。放在后面会导致
-                 log4j-api/core/slf4j-impl 被 Boot 拉回 2.17.2，而 Boot 不认识的
-                 log4j-slf4j2-impl 仍是 ${log4j2.version} —— 同一份 org.apache.logging.slf4j
-                 包出现两个版本，启动即 NoSuchMethodError。 -->
+            <!-- 自家 8 个 reactor 坐标钉 ${project.version}（z-boot README「消费模型」步骤 4）。
+                 这一格不是装饰：继承来的 DM 会改写**传递依赖**的版本，而 fleet 里 z-msg 那一格
+                 （`z-msg.version`=1.2.1，现读 z-boot-fleet/pom.xml:46）钉的是 repo1 上的**已发布件**
+                 ⇒ 下次抬 revision 时，不补这 8 条就会把 1.2.1 的字节码经传递依赖打进 1.2.2 的包里。
+                 本仓当前 revision 与 fleet 面值同为 1.2.1，所以补完这一批 tree 一行没动。
+                 z-msg-example 也在清单里，但它被 central profile 的 excludeArtifacts 挡在 Central 外、
+                 fleet 里没有这一格（gen_fleet_bom.py 的 SKIP_ARTIFACTS），写它只为让"自家坐标一律
+                 ${project.version}"这一条不再有例外。 -->
             <dependency>
-                <groupId>org.apache.logging.log4j</groupId>
-                <artifactId>log4j-bom</artifactId>
-                <version>${log4j2.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-msg</artifactId>
+                <version>${project.version}</version>
             </dependency>
-
-            <!-- Spring Boot BOM -->
-            <dependency>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-dependencies</artifactId>
-                <version>${spring-boot.version}</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-
-            <!-- 内部 module -->
             <dependency>
                 <groupId>io.github.yuku123</groupId>
                 <artifactId>z-msg-api</artifactId>
@@ -151,33 +169,67 @@
                 <artifactId>z-msg-channels</artifactId>
                 <version>${project.version}</version>
             </dependency>
-
-            <!-- z-boot BOM -->
             <dependency>
                 <groupId>io.github.yuku123</groupId>
-                <artifactId>z-boot-dependencies</artifactId>
-                <version>${z-boot.version}</version>
+                <artifactId>z-msg-example</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+
+            <!-- Log4j2 BOM 必须排在其它 import 之前（多 BOM 冲突时 Maven 取先声明者）——
+                 这一句在迁移**前**是关键，迁移**后**只剩说明作用：本仓不再 import
+                 spring-boot-dependencies（地板 1.0.19 已经 import 了同一坐标同一格 2.7.18），
+                 而 log4j2 这一族真正压住版本的是下面四条**直接**条目，不是这条 import。
+                 原因见 README 陷阱 5：`<scope>import</scope>` 进来的 BOM 顶不过从 parent
+                 继承来的直接 DM 条目，而地板把 log4j-api / -core / -jul / -slf4j-impl 四条
+                 直接钉在 2.25.4（z-boot-dependencies/pom.xml:517-535）⇒ 只留 import 的话
+                 实测这 4 件全漂到 2.25.4。import 留着是为了管住地板没逐条钉的 log4j 成员
+                 （log4j-1.2-api / log4j-web / …），直接条目负责本仓 tree 里真实出现的那 4 个。 -->
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-bom</artifactId>
+                <version>${log4j2.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
-
-            <!-- z-util -->
             <dependency>
-                <groupId>io.github.yuku123</groupId>
-                <artifactId>z-util-core</artifactId>
-                <version>${z-util.version}</version>
-                <exclusions>
-                    <!-- z-util-core 自带 SLF4J 2.x 的绑定 log4j-slf4j2-impl；本工程栈是
-                         Spring Boot 2.7 = slf4j-api 1.7.36，只能留 log4j-slf4j-impl。
-                         两个 jar 共用 org.apache.logging.slf4j 包名，谁先上 classpath
-                         谁赢，输的那个的 StaticLoggerBinder 会去 new 一个已被删掉的
-                         无参构造器。 -->
-                    <exclusion>
-                        <groupId>org.apache.logging.log4j</groupId>
-                        <artifactId>log4j-slf4j2-impl</artifactId>
-                    </exclusion>
-                </exclusions>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-api</artifactId>
+                <version>${log4j2.version}</version>
             </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-core</artifactId>
+                <version>${log4j2.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-jul</artifactId>
+                <version>${log4j2.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.logging.log4j</groupId>
+                <artifactId>log4j-slf4j-impl</artifactId>
+                <version>${log4j2.version}</version>
+            </dependency>
+
+            <!-- 迁移删掉的条目（逐条对过 preflight 第 2/5 节，判"供不供"按坐标不按键名）：
+                 1) org.springframework.boot:spring-boot-dependencies:${spring-boot.version} 的 import
+                    —— 地板 1.0.19 自己 import 同一坐标同一格 2.7.18；本仓再 import 一份只会和
+                    地板 import 的 spring-framework-bom 5.3.39 / netty-bom 4.1.138.Final 抢 dm 优先级。
+                 2) io.github.yuku123:z-boot-dependencies（原键 z-boot.version=1.0.17）的 import
+                    —— parent 的 parent 就是这一坐标（1.0.19）。留 1.0.17 的 import 顶不住继承来的
+                    直接条目（README 陷阱 5），只会造成 dm 打架；地板抬一格是本迁移的目的本身。
+                 3) io.github.yuku123:z-util-core（原键 z-util.version=1.0.13）
+                    —— fleet 按同一坐标供 1.0.13，同值 ⇒ 整条删掉。
+                    ⚠ 这条原来的真正作用不是版本、是它身上那条 `log4j-slf4j2-impl` 的 exclusion
+                    （z-util-core:1.0.13 的发布 pom 确实带 SLF4J 2.x 那支绑定，repo1 回读命中；
+                    它和本仓用的 log4j-slf4j-impl 共用 org.apache.logging.slf4j 包名，同时在类路径上
+                    就是 NoSuchMethodError，而本仓的 enforcer 规则也直接把它 ban 掉）。
+                    exclusion 是实现选择不是版本，所以它跟着 z-util-core 的**声明点**走：
+                    已逐模块写进 core/channels/web/ws/im 的 `<exclusions>`（写法照 z-kb-core/pom.xml:63-75）。
+                    这样写还有个好处：transitive 的 z-util-core 只可能来自这四个模块的声明点
+                    （repo1 回读 z-boot-web-starter / z-boot-datasource-starter / z-boot-base 的
+                    1.0.17 与 1.0.19 四份 pom，z-util 引用计数均为 0），不存在漏排的路径。 -->
         </dependencies>
     </dependencyManagement>
 
@@ -221,6 +273,16 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
+                <!-- 键已删，引用点留着：${flatten-maven-plugin.version}=1.7.3 现在由 parent 的
+                     properties 供（z-boot-parent/pom.xml:70，与本仓迁移前逐字相同）。
+                     写成空 <version> 也能解析到 parent 的 pluginManagement，但本仓的发布形状
+                     要求这条声明**常开**（不挂 central profile）：z-boot-parent 那条 flatten 是
+                     <inherited>false</inherited>（z-boot-parent/pom.xml:255-266，它自己用
+                     resolveCiFriendliesOnly），不会把 flatten 下发给消费仓 ⇒ 一旦本仓不声明，
+                     加了 <parent> 之后发出去的 pom 就会带着 z-boot-parent:1.0.19 出厂，
+                     而本仓中央上现在是自包含 raw pom（repo1 回读 z-msg/z-msg-api/…/z-msg-channels
+                     1.2.1 七份，`<parent>` 计数全为 0、com.zifang 计数 0），形状不能被我这一刀改掉。
+                     central_pom_scan 的 E 类也只看本仓 pom 链、不跟外部 parent 走 ⇒ 显式写一行。 -->
                 <version>${flatten-maven-plugin.version}</version>
                 <configuration>
                     <updatePomFile>true</updatePomFile>
@@ -245,7 +307,12 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <!-- 同上：3.11.0 这一格 parent 的 pluginManagement 与本仓迁移前逐字相同，
+                     键住在父链里（z-boot-parent/pom.xml:61），这里留一行引用点让尺子保持绿。
+                     ⚠ parent 那份 <configuration> 的 <compilerArgs>-parameters</compilerArgs> 是
+                     **合并**进来的、挡不住（z-gw/z-config 试点都实测过：class 的 MethodParameters
+                     属性会变，major 仍是 52）。换 Spring 构造器注入的参数名口径不在这一刀里。 -->
+                <version>${maven-compiler-plugin.version}</version>
                 <configuration>
                     <source>${maven.compiler.source}</source>
                     <target>${maven.compiler.target}</target>
