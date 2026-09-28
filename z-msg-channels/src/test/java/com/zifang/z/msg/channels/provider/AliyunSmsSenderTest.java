@@ -60,7 +60,7 @@ class AliyunSmsSenderTest {
     }
 
     @Test
-    void canonicalQueryAndSignatureEqualOfflineVector() {
+    void canonicalQueryAndSignatureEqualOfflineVector() throws IOException {
         stub.enqueue("/", 200, "{\"Code\":\"OK\",\"RequestId\":\"req-1\",\"BizId\":\"biz-42\"}");
 
         MessageSendResult r = sender.send(sms());
@@ -81,7 +81,7 @@ class AliyunSmsSenderTest {
                         + "&Timestamp=2023-07-22T08%3A00%3A00Z&Version=2017-05-25",
                 raw.substring(0, idx));
         assertEquals("Td0kLhFnawX2kJP1Dgk3GETY5qg=", java.net.URLDecoder.decode(
-                raw.substring(idx + "&Signature=".length()), java.nio.charset.StandardCharsets.UTF_8));
+                raw.substring(idx + "&Signature=".length()), java.nio.charset.StandardCharsets.UTF_8.name()));
     }
 
     @Test
