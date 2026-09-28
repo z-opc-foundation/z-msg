@@ -87,7 +87,7 @@
 
     <properties>
         <!-- CI-friendly 版本根 (发版改这一处即可) -->
-        <revision>1.2.1</revision>
+        <revision>1.2.2</revision>
 
         <!-- 版本口径全部由 parent 下发。2026-09-29 迁移删掉的键逐条按**坐标**对过
              （parent_preflight.py 对 z-msg 报的第 2/5 节）：
