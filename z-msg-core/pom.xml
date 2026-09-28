@@ -51,7 +51,7 @@
 
     <properties>
         <z-boot.version>1.0.17</z-boot.version>
-        <z-util.version>1.0.10</z-util.version>
+        <z-util.version>1.0.13</z-util.version>
     </properties>
 
     <dependencies>
