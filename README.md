@@ -89,7 +89,7 @@
 ```
 z-msg/
 ├── pom.xml                  # 聚合 parent：继承 z-boot-parent:1.0.21，${revision}=1.2.2 + flatten(oss)
-├── _doc/001_WS_PROTOCOL.md  # 实时协议逐帧规范（本仓唯一 _doc 文件）
+├── _doc/001_arch/04-protocol.md  # 实时协议逐帧规范（本仓唯一 _doc 文件）
 ├── z-msg-api/               # 纯 SPI 与常量，零实现零 Spring
 ├── z-msg-core/              # 默认 provider（mock/SMTP）+ ChannelRouter + 限流 + 重试 + 模板 + 站内信 + 票签发 + 7 表 DDL
 ├── z-msg-channels/          # 真实外部厂商 provider
@@ -97,8 +97,8 @@ z-msg/
 ├── z-msg-ws/                # WebSocket 实时层：短期票握手 + 帧协议（ready 自描述、带内换票）+ topic 订阅 + 三态授权 + 在线注册表
 ├── z-msg-im/                # 会话/成员/消息/已读回执域，seq 分配与增量同步，自带 4 张表与 REST
 ├── z-msg-example/           # 演示宿主：大厅聊天室 + 站内信（maven.deploy.skip=true，不进中央仓库）
-├── deploy_maven_center.sh   # 一键发布 Maven Central（publish/verify/gpg-init/readme），仓库根
-└── install-settings.sh      # 把 Central 凭证写入 ~/.m2/settings.xml，仓库根
+├── _doc/003_script/deploy_maven_center.sh   # 一键发布 Maven Central（publish/verify/gpg-init/readme），仓库根
+└── _doc/003_script/install-settings.sh      # 把 Central 凭证写入 ~/.m2/settings.xml，仓库根
 ```
 
 | 模块 | 职责 |
@@ -113,7 +113,7 @@ z-msg/
 
 > `z-msg-spring-boot-starter` 已不在本仓——它下沉到 `z-boot/z-boot-integration-starters/z-boot-msg-starter`。
 > 深入文档各就各位，本 README 只讲清边界与入口：
-> - 实时协议逐帧说明 → [`_doc/001_WS_PROTOCOL.md`](_doc/001_WS_PROTOCOL.md)
+> - 实时协议逐帧说明 → [`_doc/001_arch/04-protocol.md`](_doc/001_arch/04-protocol.md)
 > - 渠道 / 签名 / 超时 / 待核对项 → [`z-msg-channels/README.md`](z-msg-channels/README.md)
 > - 五分钟跑起来、宿主四个文件 → [`z-msg-example/README.md`](z-msg-example/README.md)
 
@@ -171,7 +171,7 @@ z:
 | `MSG_TICKET_SECRET` | 实时短期票 HMAC 密钥；空则握手 fail-closed |
 | `MSG_DB_USER` / `MSG_DB_PASSWORD` | z-msg 独立库数据源 |
 | `DING_TOKEN` / `DING_SECRET` 等 | 各厂商 channel 参数，逐键见 [`z-msg-channels/README.md`](z-msg-channels/README.md) |
-| `CENTRAL_USERNAME` / `CENTRAL_TOKEN` | 发布 Maven Central 用（`install-settings.sh` 写入 `~/.m2/settings.xml`） |
+| `CENTRAL_USERNAME` / `CENTRAL_TOKEN` | 发布 Maven Central 用（`_doc/003_script/install-settings.sh` 写入 `~/.m2/settings.xml`） |
 
 `dataSourceMsg` 带 `@ConditionalOnMissingBean(name="dataSourceMsg")`，宿主可以自己顶一个
 （演示宿主就是这么塞 H2 的），但顶完必须保证 `sqlSessionFactoryMsg` 仍指向它——见「装配契约」。
@@ -278,7 +278,7 @@ WS  /api/msg/ws?token=<token>      ← 握手只认这张票，签名/受众/过
 连上后服务端先推一帧 `ready`（含自动订阅好的 `user:<自己>`、`sys:broadcast` 与配置声明的公共 topic），
 之后客户端帧是 `subscribe` / `unsubscribe` / `publish` / `ping` / `auth` 五张，服务端帧是
 `pong` / `ready` / `message` / `ack` / `error`。逐字段、错误码、资源上限、断线与并发语义都在
-[`_doc/001_WS_PROTOCOL.md`](_doc/001_WS_PROTOCOL.md)。
+[`_doc/001_arch/04-protocol.md`](_doc/001_arch/04-protocol.md)。
 
 `ready` 除了 `connectionId` / `userId` / `topics`，还报出 `ops`（服务端认哪几张帧）与 `limits`
 （当前真正生效的资源上限）。它要顶掉的是前端抄默认值这件事：`idle-timeout-seconds` 从 120 改成 31
@@ -346,7 +346,7 @@ z-msg:
 
 跑起来的完整版本在 `z-msg-example`：两条真 WebSocket、两个登录身份、A 打字 B 立刻看到，
 由 `MsgExampleApplicationTest` 在无 mock 的情况下钉住。演示页头显示 `ready` 报回来的 `ops`/`limits`，
-心跳间隔按 `idleTimeoutSeconds` 推（推导规则见 `_doc/001_WS_PROTOCOL.md` §2）。
+心跳间隔按 `idleTimeoutSeconds` 推（推导规则见 `_doc/001_arch/04-protocol.md` §2）。
 
 ---
 
@@ -676,7 +676,7 @@ _Maintained by the z-opc-foundation organization._
 **平铺的**实时协议文件（文件名也不带 `_doc` 规范的编号前缀）。下面链接的都是实测真实存在的文件：
 
 - [`_doc/`](_doc/) — 文档目录（当前非分层，只有一个文件）
-  - [`001_WS_PROTOCOL.md`](_doc/001_WS_PROTOCOL.md) — z-msg WebSocket 实时协议逐帧规范（握手 / 帧格式 /
+  - [`001_WS_PROTOCOL.md`](_doc/001_arch/04-protocol.md) — z-msg WebSocket 实时协议逐帧规范（握手 / 帧格式 /
     `op=auth` 带内换票 / topic 命名 / 三态授权 / 错误码 / 资源上限 / 断线并发 / 最小前端）。该文件对"哪些改动
     已发布"的旁注以本 README「发布状态」为准：`op=auth`、`ready` 自描述、IM 字符串 id、`createdTime` ISO
     均已随 1.2.1/1.2.2 上中央仓库。
@@ -686,7 +686,7 @@ _Maintained by the z-opc-foundation organization._
 - [`z-msg-channels/README.md`](z-msg-channels/README.md) — 渠道 provider / 签名 / 超时 / 未支持与待核对项
 - [`z-msg-example/README.md`](z-msg-example/README.md) — 五分钟跑起来、宿主四个文件
 
-发布脚本**平铺在仓库根**（未收口到 `_doc/003_script/`，如实写明）：
+发布脚本**平铺在仓库根**（未收口到 [`_doc/003_script/`](_doc/003_script/)，如实写明）：
 
-- [`deploy_maven_center.sh`](deploy_maven_center.sh) — 一键发布 Maven Central（子命令 `publish` / `verify` / `gpg-init` / `readme`）
-- [`install-settings.sh`](install-settings.sh) — 把 Central 凭证（`CENTRAL_USERNAME` / `CENTRAL_TOKEN`）写入 `~/.m2/settings.xml`
+- [`_doc/003_script/deploy_maven_center.sh`](_doc/003_script/deploy_maven_center.sh) — 一键发布 Maven Central（子命令 `publish` / `verify` / `gpg-init` / `readme`）
+- [`_doc/003_script/install-settings.sh`](_doc/003_script/install-settings.sh) — 把 Central 凭证（`CENTRAL_USERNAME` / `CENTRAL_TOKEN`）写入 `~/.m2/settings.xml`

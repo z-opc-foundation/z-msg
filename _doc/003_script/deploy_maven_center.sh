@@ -44,11 +44,13 @@ die()  { err "$*"; exit 1; }
 
 # ---------- 帮助 ----------
 print_help() {
-    sed -n '2,16p' "$0"
+    sed -n '2,16p' "${BASH_SOURCE[0]}"
 }
 
-# ---------- 切到 z-msg 根目录 ----------
-cd "$(dirname "$0")"
+# ---------- 切到 z-msg 根目录（脚本在 _doc/003_script/ 下，需上溯两级） ----------
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+cd "$REPO_ROOT"
 [[ -f pom.xml ]] || die "请在 z-msg 仓库根目录运行此脚本"
 
 # ---------- 加载 .env ----------

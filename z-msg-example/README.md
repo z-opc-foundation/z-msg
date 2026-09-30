@@ -1,6 +1,6 @@
 # z-msg-example
 
-一个**真的能跑起来**的宿主：大厅聊天室 + 站内信。它不进发布清单（`deploy_maven_center.sh` 不带它），
+一个**真的能跑起来**的宿主：大厅聊天室 + 站内信。它不进发布清单（`_doc/003_script/deploy_maven_center.sh` 不带它），
 唯一职责是把"接 z-msg 到底要写多少代码"这个问题变成一个可执行答案。
 
 ## 跑起来
@@ -86,8 +86,8 @@ cd z-msg && mvn -B -o -pl z-msg-example test
 
 | 现象 | 原因 | 出处 |
 |---|---|---|
-| 握手 404 | `z-msg.ws.enabled=false`，或 z-msg-ws 不在 classpath | `_doc/001_WS_PROTOCOL.md` §1（握手） |
+| 握手 404 | `z-msg.ws.enabled=false`，或 z-msg-ws 不在 classpath | `_doc/001_arch/04-protocol.md` §1（握手） |
 | 握手 HTTP 503 / 换票业务 code 503 | 没配 `z-msg.realtime.ticket-secret`（fail closed，不签弱密钥票） | 同上 |
 | 握手 401 | 票缺失/形状不对/签名对不上/过期 | 同上 |
 | HTTP 全 401 | 宿主没注册 `MsgPrincipalResolver`，且 `z-msg.web.trusted-header-enabled=false` | `z-msg-web` 的 `TrustedHeaderPrincipalResolver` 注释 |
-| 连上了但收不到聊天 | 该 topic 没有策略放行，或没订阅成功 | `_doc/001_WS_PROTOCOL.md` §4 |
+| 连上了但收不到聊天 | 该 topic 没有策略放行，或没订阅成功 | `_doc/001_arch/04-protocol.md` §4 |
