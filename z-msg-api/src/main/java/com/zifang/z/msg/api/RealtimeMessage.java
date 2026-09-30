@@ -6,7 +6,7 @@ import java.io.Serializable;
  * WebSocket / SSE 线格式消息 (1.1.0)
  * <p>
  * 一个实例 = 一帧。帧类型见 {@code OP_*} 常量，协议细节见
- * {@code _doc/001_WS_PROTOCOL.md}。payload 一律是 JSON 字符串（由上层序列化），
+ * {@code _doc/001_arch/04-protocol.md}。payload 一律是 JSON 字符串（由上层序列化），
  * 传输层不理解其结构，便于 IM / 站内信 / 业务自定义事件共用一条连接。
  */
 public class RealtimeMessage implements Serializable {
@@ -28,7 +28,7 @@ public class RealtimeMessage implements Serializable {
      * <p>
      * 存在的理由：握手票只有 60 秒有效，而连接一旦建立就再也不看票——
      * 于是宿主既无法在长连接上"重新证明一次身份"，也无法不换连接地切到另一个身份。
-     * 默认关（{@code z-msg.ws.inband-auth-enabled}），见 {@code _doc/001_WS_PROTOCOL.md} §2。
+     * 默认关（{@code z-msg.ws.inband-auth-enabled}），见 {@code _doc/001_arch/04-protocol.md} §2。
      */
     public static final String OP_AUTH = "auth";
     public static final String OP_PING = "ping";

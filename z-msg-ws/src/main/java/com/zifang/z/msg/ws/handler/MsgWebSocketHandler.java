@@ -31,7 +31,7 @@ import java.util.Map;
  * 走的仍然是 {@code RealtimeTicketService#consume}，所以"帧里能改身份"并不比握手松一寸；
  * 且默认关掉（{@code z-msg.ws.inband-auth-enabled=false}）。
  * <p>
- * 协议见 {@code z-msg/_doc/001_WS_PROTOCOL.md}。
+ * 协议见 {@code z-msg/_doc/001_arch/04-protocol.md}。
  */
 public class MsgWebSocketHandler extends TextWebSocketHandler {
 

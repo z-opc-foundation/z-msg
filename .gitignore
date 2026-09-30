@@ -71,3 +71,7 @@ logs/
 .build-context/
 # ===== Git 本地备份目录 (历史塌缩用) =====
 .git.bak.*/
+
+/.cache/
+**/__pycache__/
+*.pyc

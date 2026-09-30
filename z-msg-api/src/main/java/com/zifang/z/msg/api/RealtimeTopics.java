@@ -11,7 +11,7 @@ package com.zifang.z.msg.api;
  * 标识内不允许再出现冒号。
  * <p>
  * {@code room:} 的标识是会话 id：它在线上是 19 位雪花，<b>拼 topic 请用字符串而不是
- * Number</b>（JS 的 Number 只有 53 bit，会舍掉末位），见 {@code _doc/001_WS_PROTOCOL.md} §2。
+ * Number</b>（JS 的 Number 只有 53 bit，会舍掉末位），见 {@code _doc/001_arch/04-protocol.md} §2。
  */
 public final class RealtimeTopics {
 

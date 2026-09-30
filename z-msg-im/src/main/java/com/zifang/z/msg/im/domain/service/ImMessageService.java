@@ -325,7 +325,7 @@ public class ImMessageService {
     }
 
     /**
-     * 帧的 payload，形状见 {@code _doc/001_WS_PROTOCOL.md} §2：外层帧的
+     * 帧的 payload，形状见 {@code _doc/001_arch/04-protocol.md} §2：外层帧的
      * {@code op=message / kind=chat / topic / seq / ts} 由 {@code RealtimeMessage} 负责，
      * 这里只给 payload 本体。
      * <p>
