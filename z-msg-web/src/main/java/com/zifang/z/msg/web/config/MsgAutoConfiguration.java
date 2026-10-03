@@ -18,6 +18,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
@@ -48,7 +49,24 @@ import javax.sql.DataSource;
 @Configuration
 @ConditionalOnProperty(prefix = "z-msg", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties({MessageProperties.class, MsgWebProperties.class})
-@ComponentScan(basePackages = {"com.zifang.z.msg.core", "com.zifang.z.msg.web"})
+@ComponentScan(
+        basePackages = {"com.zifang.z.msg.core", "com.zifang.z.msg.web"},
+        // 2026-10-03 实测纠错 (z-team standalone team-1 起不来的直接原因):
+        // com.zifang.z.msg.web.host 是本扫描根 com.zifang.z.msg.web 的**子包**, 于是这里
+        // 把它一并吞掉 —— 但那个子包按设计归 MsgHostAutoConfiguration 独占, 受
+        // z.msg.host.enabled 门控(standalone 不开)。归属被本扫描破坏后:
+        //   1) MsgHostAutoConfiguration 虽然在条件报告里是 Negative match, 类还是被注册了;
+        //   2) 更硬的是 MsgCodeChannelSenders 实现的 CodeChannelSender SPI 来自 z-ctc-web,
+        //      而 z-msg-web 对该依赖声明 scope=provided(注释:「host 桥接类 … 运行期由宿主供」),
+        //      standalone 的 fat jar 里没有那个 class。ASM 读它的元数据就直接炸:
+        //      FileNotFoundException: class path resource
+        //      [com/zifang/ctc/web/service/CodeChannelSender.class] cannot be opened
+        // 修法是划清边界(排除), 不是给 standalone 补 z-ctc-web 依赖 ——
+        // 那等于让所有 z-msg 使用方无条件背上 z-ctc-web。
+        excludeFilters = {
+                @ComponentScan.Filter(type = FilterType.REGEX,
+                        pattern = "com\\.zifang\\.z\\.msg\\.web\\.host(\\..*)?"),
+        })
 @MapperScan(
         basePackages = "com.zifang.z.msg.core.domain.mapper",
         sqlSessionFactoryRef = "sqlSessionFactoryMsg"
