@@ -86,6 +86,21 @@
         <dependency>
             <groupId>io.github.yuku123</groupId>
             <artifactId>z-boot-web-starter</artifactId>
+            <exclusions>
+                <!-- 2026-10-04: 这条路径以前没排过，父链从 1.0.19 抬到 1.0.21 之后
+                     z-boot-web-starter 自己带了一条 log4j-slf4j2-impl(2.25.4)，
+                     于是 ban-competing-log-bindings 在 z-msg-core 上第一次报红（enforcer 原文）：
+                         io.github.yuku123:z-msg-core:jar:1.2.2
+                            io.github.yuku123:z-boot-web-starter:jar:1.0.21
+                               org.apache.logging.log4j:log4j-slf4j2-impl:jar:2.25.4 [banned]
+                     与上面 z-util-core 那条是同一件事的第二个入口：SLF4J 2.x 绑定与本工程栈
+                     (log4j-slf4j-impl + slf4j-api 1.7.36) 共用 org.apache.logging.slf4j 包名，
+                     同时在类路径上就是 NoSuchMethodError。两个入口都要排，只排一个等于没排。 -->
+                <exclusion>
+                    <groupId>org.apache.logging.log4j</groupId>
+                    <artifactId>log4j-slf4j2-impl</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- FEATURE011: 真实邮件发送 (SmtpEmailSender 用 JavaMailSender) -->

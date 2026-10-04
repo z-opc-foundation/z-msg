@@ -39,6 +39,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @SpringBootTest(classes = MsgWebTestApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @TestPropertySource(properties = {
+        // z-ctc-web 在本模块是 provided 作用域(pom 注释:"host 桥接类: CodeChannelSender SPI
+        // 来自 z-ctc-web,运行期由宿主供")。provided 在**测试**类路径上,@EnableAutoConfiguration
+        // 于是把 z-ctc 的 ZCompanyCtcWebAutoConfiguration 也拉了进来,注册出第二个 DataSource
+        // (dataSourceCtc)。而 MybatisPlusAutoConfiguration 的 sqlSessionFactory 要求容器里
+        // **只有一个** DataSource ⇒ NoUniqueBeanDefinitionException: found 2: dataSourceMsg,dataSourceCtc
+        // ⇒ 这 3 类用例集体 error(8 条),整类用例一次都没跑起来。
+        // 排掉它建模的是"只装了 z-msg-web 的宿主",与 provided 的契约一致。
+        // 真实宿主(z-opc)同时含 z-ctc-web 时是靠**排除 MybatisPlusAutoConfiguration**
+        // 解决多数据源取舍的(见 z-team-starter 的 TeamSqlSessionFactoryConfig 注释),
+        // 那边不依赖这条属性 ⇒ 生产侧无需改动。
+        // ⚠ 要排的是**两个**, 只排一个会换一个症状: 排掉 ZCompanyCtcWebAutoConfiguration 之后
+        // DataSource 冲突确实没了, 但 z-ctc-sso 的 SsoAutoConfiguration 另有一份
+        // spring.factories 注册(WebMvcConfigurer, 拦截 /**, 无类级条件, 靠 sso.exclude-paths 退出),
+        // 它会把 /api/msg/** 全部按 401 拒掉 ⇒ 用例期望的 403/200 全部落成 401。
+        // (实测 ctc 侧一共两个自动配置: ctc-sso 的 SsoAutoConfiguration +
+        //  ctc-web 的 ZCompanyCtcWebAutoConfiguration。)
+        "spring.autoconfigure.exclude=com.zifang.ctc.sso.config.SsoAutoConfiguration,com.zifang.ctc.web.config.ZCompanyCtcWebAutoConfiguration",
         "z-msg.enabled=true",
         "z-msg.web.trusted-header-enabled=true",
         "z-msg.realtime.ticket-secret=integration-test-secret-0123456789abcdef",
