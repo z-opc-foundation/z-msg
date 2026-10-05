@@ -64,8 +64,18 @@ public class ChannelRouter {
     private ChannelRateLimiter rateLimiter;
 
     /**
-     * 出站幂等表：key -> 过期时间戳。仅本 JVM 有效，跨节点幂等要靠
-     * z_msg_delivery_log 上的 uk_channel_biz_dedup 唯一索引。
+     * 出站幂等表：key -> 过期时间戳。
+     *
+     * <p><b>仅本 JVM 有效</b>。这里原来写着「跨节点幂等要靠 z_msg_delivery_log 上的
+     * {@code uk_channel_biz_dedup} 唯一索引」——那个索引在本仓两份 DDL
+     * （{@code schema-mysql.sql} / {@code schema-h2.sql}）里都不存在，
+     * {@code z_msg_delivery_log} 也压根没有 {@code idempotency_key} 这一列，
+     * {@code MsgDeliveryLogDO} 同样没有该字段，写日志时无处可写。
+     * 全工作区搜 {@code uk_channel_biz_dedup} 只命中这一行注释本身。</p>
+     *
+     * <p>也就是说：<b>多实例部署时出站幂等完全不生效</b>，同一条带 idempotencyKey 的消息
+     * 落到不同节点会各发一次。要真跨节点幂等，得同时加列 + 建唯一索引（DDL 变更，
+     * 且存量重复行会让建索引失败），已报给用户，未擅自加。</p>
      */
     private final ConcurrentHashMap<String, Long> issued = new ConcurrentHashMap<>();
 
@@ -76,7 +86,7 @@ public class ChannelRouter {
      */
     public MessageSendResult route(Message message) {
         Outcome o = deliver(message, true);
-        if (o.getStatus() == FanOutResult.STATUS_SUCCESS || o.getStatus() == FanOutResult.STATUS_MOCK) {
+        if (delivered(o)) {
             return MessageSendResult.ok(o.getProvider(), o.getProviderMessageId());
         }
         return MessageSendResult.fail(o.getProvider(), o.getErrorCode(), o.getErrorMessage());
@@ -197,13 +207,28 @@ public class ChannelRouter {
         if (outcome.getStatus() == FanOutResult.STATUS_FAILED && allowFallback) {
             Outcome fb = tryFallback(message, outcome, start);
             if (fb != null) {
+                // 降级已经把消息送到用户手里了：占位。这里以前直接 return，
+                // 于是"送达了的"不占位、"没送达的"反倒占位，两头都反了
+                if (idemKey != null) {
+                    markIssued(idemKey);
+                }
                 return fb;
             }
         }
-        if (idemKey != null) {
+        if (idemKey != null && delivered(outcome)) {
             markIssued(idemKey);
         }
         return finish(message, outcome, start, templateId, outcome.getAttempts());
+    }
+
+    /**
+     * 这一次到底有没有把消息送出去。
+     * <p>只有真送出去了才配占幂等位：厂商故障、限流、偏好屏蔽这些一律不占，
+     * 否则一次网络抖动就把这条消息钉死在 24 小时窗口里，重放也发不出去。</p>
+     */
+    private static boolean delivered(Outcome o) {
+        return o.getStatus() == FanOutResult.STATUS_SUCCESS
+                || o.getStatus() == FanOutResult.STATUS_MOCK;
     }
 
     private Outcome dispatchWithRetry(Message message) {

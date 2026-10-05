@@ -540,6 +540,20 @@ FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers
 窗口内成功握手超过 2 万条时开始丢弃最早过期的记录（降级、但会 warn）。要跨实例严格一次得把 jti 放进共享存储
 （Redis 之类），z-msg 不替你引这个依赖。
 
+**出站幂等的边界**：`Message.idempotencyKey` 的「同 channel + bizType + key 只投递一次」只在**单个 JVM** 内成立
+——`ChannelRouter` 的 `issued` 是一张 `ConcurrentHashMap`。**多实例部署时这条不成立**：同一条带幂等键的消息
+落到不同节点会各发一次。
+
+这里原注释写着「跨节点幂等要靠 `z_msg_delivery_log` 上的 `uk_channel_biz_dedup` 唯一索引」——**那个索引不存在**：
+本仓两份 DDL（`schema-mysql.sql` / `schema-h2.sql`）里 `z_msg_delivery_log` 只有 5 个普通索引
+（`idx_log_biz_time` / `idx_log_user_time` / `idx_log_status_time` / `idx_log_retry` / `idx_log_provider_msg`），
+既没有这个唯一键，表也没有 `idempotency_key` 这一列，`MsgDeliveryLogDO` 同样没有该字段——写日志时无处可写。
+全工作区搜 `uk_channel_biz_dedup` 只命中那一行注释本身。要真跨节点幂等得**同时**加列 + 建唯一索引（DDL 变更，
+且存量重复行会让建索引失败），未擅自加。
+
+落位时机上，幂等位只在**消息真的送出去了**时才占：厂商故障、限流、偏好屏蔽、静默时段一律不占，
+否则一次网络抖动就把这条消息钉死在 24 小时窗口里、重放也发不出去。
+
 ---
 
 ## ⚙️ 配置全表
@@ -615,14 +629,17 @@ mvn -B -o clean verify       # 8 模块全量校验
 
 | 模块 | 关键几例 |
 |---|---|
-| core | `SchemaParityTest`（MySQL/H2 两份 DDL 真跑、同表同列）、`SenderRegistryProviderDefaultTest`（缺 provider 兜底成 mock 且被如实标记）、`RealtimeTicketServiceTest`（签发/验签/过期/篡改 + 一次性消费：`consume` 只放行第一次、`verify` 仍可重复且**不是**安全闸门、2 万条上限真把住且超量降级） |
+| core | `SchemaParityTest`（MySQL/H2 两份 DDL 真跑、同表同列）、`SenderRegistryProviderDefaultTest`（缺 provider 兜底成 mock 且被如实标记）、`ChannelRouterIdempotencyTest`（出站幂等的落位时机：主通道成功要占位、**降级送达同样要占位**否则用户收两条、投递失败绝不占位否则重放被吞——三条里后两条首跑都是红的）、`RealtimeTicketServiceTest`（签发/验签/过期/篡改 + 一次性消费：`consume` 只放行第一次、`verify` 仍可重复且**不是**安全闸门、2 万条上限真把住且超量降级） |
 | web | `MsgInboxApiTest`（匿名 401 而登录 200、`oneUserCannotSeeOrMutateAnotherUsersInbox`、过期项既不列表也不计红点、分页真截断且 `total` 是真的、同 `idempotencyKey` 不重复入库、自省接口如实标 mock、`ws-token` 绑当前人）、`MsgAdminEndpointGateTest` / `MsgAdminEndpointEnabledTest`（缺省时管理面一律 HTTP 403 且正文点名开关、非管理面照常答、开关打开后同一批全 200——后者是前者的对照） |
 | ws | 握手 fail-closed、`enabled=false` 全撤、端到端（多的一例：同一张票第二次握手 401 且换新票同用户照样连得上）、授权策略、注册表索引（8 持票 × 4 加入 × 20000 代对撞）、带内换票 `op=auth` 8 例（同身份续期与重放必拒、坏票不改任何状态、非本人频道按新身份复核并退订、票签名段进不了日志）+ 默认关时回 `WS_AUTH_DISABLED` 1 例、`ready` 自描述 7 例（`ops`/`limits` 与那道闸同源、"不限"三项整键缺席、分发分支与清单双向一致的源码普查） |
 | im | 自动装配（im 的 mapper 与 core 的 mapper 落在同一个 `sqlSessionFactoryMsg`）、禁用路径（读 `ConditionEvaluationReport` 点名 `im.enabled`）、三态授权、两条真 socket 的实时、REST（`conversationIdSurvivesAJavaScriptStyleRoundTrip`：把响应里 19 位字符**原样**回填 `message/send`/`history`/`unread/summary` 再比一次）、服务层（增量同步判定量：`hasMore` 只来自多读的那一条、照 `nextSinceSeq` 翻到底一条不多不少、`minVisibleSeq` 报真生效的游标） |
 | channels | 每家 sender 都配本地 stub server 离线测；阿里云 RPC 签名与腾讯云 TC3-HMAC-SHA256 有固定向量钉死，凭据不上日志 |
 | example | 大厅 A 发言进 B 的帧、未放行 topic 被拒而大厅同连接可发、站内信三处同时命中、未登录 401、首页真伺服、同 cookie jar 两个标签页仍是两个人、私聊面板那条端到端（真 Tomcat + 真 H2 + 两条真 socket）、`MsgAdminSurfaceCensusTest`（全量装配宿主里逐条过闸门，钉住"拦下 / 放行"两份清单） |
 
-> 主干工作树上一次全量 `mvn -B -o clean verify`（2026-09-27 那棵树）为 **224 例、0 失败 0 跳过**
+> 主干工作树上一次全量 `mvn -B -o clean verify`（2026-09-27 那棵树）为 **224 例、0 失败 0 跳过**；
+> 本次改动后 `mvn -o clean test`（2026-10-06，JDK 8，8 模块全跑）为 **227 例、0 失败 0 跳过**
+> （多出的 3 例即 `ChannelRouterIdempotencyTest`；`z-msg-ws` / `z-msg-im` / `z-msg-example` 三个模块
+> 此前在本机因 `~/.m2` 缓存缺 `central=` 记录而无法离线解析，一直是被 SKIPPED 的，这轮才真跑到）
 > （core 26 / channels 82 / web 13 / ws 39 / im 56 / example 8）。此后仅有 pom/依赖口径改动与一支
 > charset 测试修补（`9ca2948`），未重跑，例数不变。`1.2.1`/`1.2.2` 的发布树是在含 op=auth、`ready`
 > 自描述、IM 字符串 id、`createdTime` ISO、腾讯云·极光 sender 那批守卫之后重发的；本 README 未对
