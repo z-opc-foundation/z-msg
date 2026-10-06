@@ -22,6 +22,16 @@ public class MsgDeliveryLogDO {
      */
     private String channel;
     /**
+     * 出站幂等位。存的是 {@code channel|bizType|key|userId|receiver} 拼成的去重令牌
+     * （拼法见 {@code ChannelRouter.dedupToken}），不是调用方传进来的裸 key ——
+     * 裸 key 单独不唯一：同一 dedupKey 可能发给多个用户。
+     *
+     * <p><b>只有"已送达"的行持有它</b>：厂商故障、限流、偏好屏蔽、静默时段一律写 NULL。
+     * 唯一索引允许多个 NULL，所以不占位的行彼此不会撞；这一条与
+     * {@code ChannelRouter} 里"没送出去就不占位"的判断必须成对维护。</p>
+     */
+    private String idempotencyKey;
+    /**
      * 实际 provider (mock/smtp/aliyun/wecom...)
      */
     private String provider;
@@ -71,6 +81,14 @@ public class MsgDeliveryLogDO {
 
     public void setChannel(String channel) {
         this.channel = channel;
+    }
+
+    public String getIdempotencyKey() {
+        return idempotencyKey;
+    }
+
+    public void setIdempotencyKey(String idempotencyKey) {
+        this.idempotencyKey = idempotencyKey;
     }
 
     public String getProvider() {
