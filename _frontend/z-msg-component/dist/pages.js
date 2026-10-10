@@ -484,5 +484,5 @@ export {
   Re as TemplateList,
   Ue as configureMsg,
   Ne as menuItems,
-  Fe as routeTable
+  Fe as routes
 };
