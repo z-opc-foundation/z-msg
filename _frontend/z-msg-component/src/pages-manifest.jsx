@@ -16,7 +16,7 @@ export const menuItems = [
     { key: '/z-msg/delivery', label: '投递记录', icon: <SendOutlined /> },
 ]
 
-export const routeTable = [
+export const routes = [
     { path: '/z-msg/home', Component: HomePage },
     { path: '/z-msg/templates', Component: TemplateList },
     { path: '/z-msg/delivery', Component: DeliveryLogs },
