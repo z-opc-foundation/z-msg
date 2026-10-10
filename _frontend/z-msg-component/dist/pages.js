@@ -1,9 +1,10 @@
-import pe, { useState as f, useEffect as H } from "react";
-import { ReloadOutlined as Z, MailOutlined as he, SendOutlined as Ee } from "@ant-design/icons";
-import { Typography as K, Space as Q, Button as ee, Alert as te, Card as O, Table as re, Tag as C, Row as ye, Col as z, Statistic as D } from "antd";
-import { m as F } from "./api-CCr3uJUB.js";
-import { c as $e } from "./api-CCr3uJUB.js";
-var I = { exports: {} }, A = {};
+import he, { useState as m, useEffect as W } from "react";
+import { ReloadOutlined as Q, HomeOutlined as ge, MailOutlined as ye, SendOutlined as xe } from "@ant-design/icons";
+import { Typography as U, Space as z, Button as ee, Alert as re, Card as k, Table as te, Tag as I, Row as ne, Col as N, Statistic as F } from "antd";
+import { m as M } from "./api-CCr3uJUB.js";
+import { c as Ue } from "./api-CCr3uJUB.js";
+import { useNavigate as ve } from "react-router-dom";
+var C = { exports: {} }, P = {};
 /**
  * @license React
  * react-jsx-runtime.production.js
@@ -13,29 +14,29 @@ var I = { exports: {} }, A = {};
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-var V;
-function ge() {
-  if (V) return A;
-  V = 1;
-  var c = Symbol.for("react.transitional.element"), m = Symbol.for("react.fragment");
-  function u(E, s, d) {
-    var p = null;
-    if (d !== void 0 && (p = "" + d), s.key !== void 0 && (p = "" + s.key), "key" in s) {
-      d = {};
-      for (var y in s)
-        y !== "key" && (d[y] = s[y]);
-    } else d = s;
-    return s = d.ref, {
-      $$typeof: c,
-      type: E,
-      key: p,
-      ref: s !== void 0 ? s : null,
-      props: d
+var X;
+function Ee() {
+  if (X) return P;
+  X = 1;
+  var i = Symbol.for("react.transitional.element"), l = Symbol.for("react.fragment");
+  function d(p, n, f) {
+    var h = null;
+    if (f !== void 0 && (h = "" + f), n.key !== void 0 && (h = "" + n.key), "key" in n) {
+      f = {};
+      for (var y in n)
+        y !== "key" && (f[y] = n[y]);
+    } else f = n;
+    return n = f.ref, {
+      $$typeof: i,
+      type: p,
+      key: h,
+      ref: n !== void 0 ? n : null,
+      props: f
     };
   }
-  return A.Fragment = m, A.jsx = u, A.jsxs = u, A;
+  return P.Fragment = l, P.jsx = d, P.jsxs = d, P;
 }
-var P = {};
+var O = {};
 /**
  * @license React
  * react-jsx-runtime.development.js
@@ -45,128 +46,128 @@ var P = {};
  * This source code is licensed under the MIT license found in the
  * LICENSE file in the root directory of this source tree.
  */
-var G;
-function ve() {
-  return G || (G = 1, process.env.NODE_ENV !== "production" && (function() {
-    function c(e) {
+var Z;
+function Te() {
+  return Z || (Z = 1, process.env.NODE_ENV !== "production" && (function() {
+    function i(e) {
       if (e == null) return null;
       if (typeof e == "function")
-        return e.$$typeof === de ? null : e.displayName || e.name || null;
+        return e.$$typeof === fe ? null : e.displayName || e.name || null;
       if (typeof e == "string") return e;
       switch (e) {
-        case n:
+        case o:
           return "Fragment";
-        case S:
+        case A:
           return "Profiler";
-        case b:
+        case _:
           return "StrictMode";
-        case se:
-          return "Suspense";
         case le:
+          return "Suspense";
+        case ie:
           return "SuspenseList";
-        case ce:
-          return "Activity";
         case ue:
+          return "Activity";
+        case de:
           return "ViewTransition";
       }
       if (typeof e == "object")
         switch (typeof e.tag == "number" && console.error(
           "Received an unexpected object in getComponentNameFromType(). This is likely a bug in React. Please file an issue."
         ), e.$$typeof) {
-          case h:
+          case g:
             return "Portal";
-          case ne:
+          case oe:
             return e.displayName || "Context";
           case ae:
             return (e._context.displayName || "Context") + ".Consumer";
-          case oe:
+          case se:
             var t = e.render;
             return e = e.displayName, e || (e = t.displayName || t.name || "", e = e !== "" ? "ForwardRef(" + e + ")" : "ForwardRef"), e;
-          case ie:
-            return t = e.displayName || null, t !== null ? t : c(e.type) || "Memo";
-          case N:
+          case ce:
+            return t = e.displayName || null, t !== null ? t : i(e.type) || "Memo";
+          case L:
             t = e._payload, e = e._init;
             try {
-              return c(e(t));
+              return i(e(t));
             } catch {
             }
         }
       return null;
     }
-    function m(e) {
+    function l(e) {
       return "" + e;
     }
-    function u(e) {
+    function d(e) {
       try {
-        m(e);
+        l(e);
         var t = !1;
       } catch {
         t = !0;
       }
       if (t) {
         t = console;
-        var o = t.error, l = typeof Symbol == "function" && Symbol.toStringTag && e[Symbol.toStringTag] || e.constructor.name || "Object";
-        return o.call(
+        var s = t.error, c = typeof Symbol == "function" && Symbol.toStringTag && e[Symbol.toStringTag] || e.constructor.name || "Object";
+        return s.call(
           t,
           "The provided key is an unsupported type %s. This value must be coerced to a string before using it here.",
-          l
-        ), m(e);
+          c
+        ), l(e);
       }
     }
-    function E(e) {
-      if (e === n) return "<>";
-      if (typeof e == "object" && e !== null && e.$$typeof === N)
+    function p(e) {
+      if (e === o) return "<>";
+      if (typeof e == "object" && e !== null && e.$$typeof === L)
         return "<...>";
       try {
-        var t = c(e);
+        var t = i(e);
         return t ? "<" + t + ">" : "<...>";
       } catch {
         return "<...>";
       }
     }
-    function s() {
-      var e = L.A;
+    function n() {
+      var e = $.A;
       return e === null ? null : e.getOwner();
     }
-    function d() {
+    function f() {
       return Error("react-stack-top-frame");
     }
-    function p(e) {
-      if (M.call(e, "key")) {
+    function h(e) {
+      if (B.call(e, "key")) {
         var t = Object.getOwnPropertyDescriptor(e, "key").get;
         if (t && t.isReactWarning) return !1;
       }
       return e.key !== void 0;
     }
     function y(e, t) {
-      function o() {
-        W || (W = !0, console.error(
+      function s() {
+        J || (J = !0, console.error(
           "%s: `key` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://react.dev/link/special-props)",
           t
         ));
       }
-      o.isReactWarning = !0, Object.defineProperty(e, "key", {
-        get: o,
+      s.isReactWarning = !0, Object.defineProperty(e, "key", {
+        get: s,
         configurable: !0
       });
     }
-    function j() {
-      var e = c(this.type);
-      return U[e] || (U[e] = !0, console.error(
+    function R() {
+      var e = i(this.type);
+      return q[e] || (q[e] = !0, console.error(
         "Accessing element.ref was removed in React 19. ref is now a regular prop. It will be removed from the JSX Element type in a future release."
       )), e = this.props.ref, e !== void 0 ? e : null;
     }
-    function k(e, t, o, l, R, v) {
-      var i = o.ref;
+    function S(e, t, s, c, b, v) {
+      var u = s.ref;
       return e = {
         $$typeof: a,
         type: e,
         key: t,
-        props: o,
-        _owner: l
-      }, (i !== void 0 ? i : null) !== null ? Object.defineProperty(e, "ref", {
+        props: s,
+        _owner: c
+      }, (u !== void 0 ? u : null) !== null ? Object.defineProperty(e, "ref", {
         enumerable: !1,
-        get: j
+        get: R
       }) : Object.defineProperty(e, "ref", { enumerable: !1, value: null }), e._store = {}, Object.defineProperty(e._store, "validated", {
         configurable: !1,
         enumerable: !1,
@@ -181,7 +182,7 @@ function ve() {
         configurable: !1,
         enumerable: !1,
         writable: !0,
-        value: R
+        value: b
       }), Object.defineProperty(e, "_debugTask", {
         configurable: !1,
         enumerable: !1,
@@ -189,136 +190,136 @@ function ve() {
         value: v
       }), Object.freeze && (Object.freeze(e.props), Object.freeze(e)), e;
     }
-    function x(e, t, o, l, R, v) {
-      var i = t.children;
-      if (i !== void 0)
-        if (l)
-          if (fe(i)) {
-            for (l = 0; l < i.length; l++)
-              T(i[l]);
-            Object.freeze && Object.freeze(i);
+    function E(e, t, s, c, b, v) {
+      var u = t.children;
+      if (u !== void 0)
+        if (c)
+          if (me(u)) {
+            for (c = 0; c < u.length; c++)
+              T(u[c]);
+            Object.freeze && Object.freeze(u);
           } else
             console.error(
               "React.jsx: Static children should always be an array. You are likely explicitly calling React.jsxs or React.jsxDEV. Use the Babel transform instead."
             );
-        else T(i);
-      if (M.call(t, "key")) {
-        i = c(e);
-        var w = Object.keys(t).filter(function(me) {
-          return me !== "key";
+        else T(u);
+      if (B.call(t, "key")) {
+        u = i(e);
+        var w = Object.keys(t).filter(function(pe) {
+          return pe !== "key";
         });
-        l = 0 < w.length ? "{key: someKey, " + w.join(": ..., ") + ": ...}" : "{key: someKey}", J[i + l] || (w = 0 < w.length ? "{" + w.join(": ..., ") + ": ...}" : "{}", console.error(
+        c = 0 < w.length ? "{key: someKey, " + w.join(": ..., ") + ": ...}" : "{key: someKey}", H[u + c] || (w = 0 < w.length ? "{" + w.join(": ..., ") + ": ...}" : "{}", console.error(
           `A props object containing a "key" prop is being spread into JSX:
   let props = %s;
   <%s {...props} />
 React keys must be passed directly to JSX without using spread:
   let props = %s;
   <%s key={someKey} {...props} />`,
-          l,
-          i,
+          c,
+          u,
           w,
-          i
-        ), J[i + l] = !0);
+          u
+        ), H[u + c] = !0);
       }
-      if (i = null, o !== void 0 && (u(o), i = "" + o), p(t) && (u(t.key), i = "" + t.key), "key" in t) {
-        o = {};
-        for (var $ in t)
-          $ !== "key" && (o[$] = t[$]);
-      } else o = t;
-      return i && y(
-        o,
+      if (u = null, s !== void 0 && (d(s), u = "" + s), h(t) && (d(t.key), u = "" + t.key), "key" in t) {
+        s = {};
+        for (var D in t)
+          D !== "key" && (s[D] = t[D]);
+      } else s = t;
+      return u && y(
+        s,
         typeof e == "function" ? e.displayName || e.name || "Unknown" : e
-      ), k(
+      ), S(
         e,
-        i,
-        o,
-        s(),
-        R,
+        u,
+        s,
+        n(),
+        b,
         v
       );
     }
     function T(e) {
-      _(e) ? e._store && (e._store.validated = 1) : typeof e == "object" && e !== null && e.$$typeof === N && (e._payload.status === "fulfilled" ? _(e._payload.value) && e._payload.value._store && (e._payload.value._store.validated = 1) : e._store && (e._store.validated = 1));
+      j(e) ? e._store && (e._store.validated = 1) : typeof e == "object" && e !== null && e.$$typeof === L && (e._payload.status === "fulfilled" ? j(e._payload.value) && e._payload.value._store && (e._payload.value._store.validated = 1) : e._store && (e._store.validated = 1));
     }
-    function _(e) {
+    function j(e) {
       return typeof e == "object" && e !== null && e.$$typeof === a;
     }
-    var g = pe, a = Symbol.for("react.transitional.element"), h = Symbol.for("react.portal"), n = Symbol.for("react.fragment"), b = Symbol.for("react.strict_mode"), S = Symbol.for("react.profiler"), ae = Symbol.for("react.consumer"), ne = Symbol.for("react.context"), oe = Symbol.for("react.forward_ref"), se = Symbol.for("react.suspense"), le = Symbol.for("react.suspense_list"), ie = Symbol.for("react.memo"), N = Symbol.for("react.lazy"), ce = Symbol.for("react.activity"), ue = Symbol.for("react.view_transition"), de = Symbol.for("react.client.reference"), L = g.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, M = Object.prototype.hasOwnProperty, fe = Array.isArray, Y = console.createTask ? console.createTask : function() {
+    var x = he, a = Symbol.for("react.transitional.element"), g = Symbol.for("react.portal"), o = Symbol.for("react.fragment"), _ = Symbol.for("react.strict_mode"), A = Symbol.for("react.profiler"), ae = Symbol.for("react.consumer"), oe = Symbol.for("react.context"), se = Symbol.for("react.forward_ref"), le = Symbol.for("react.suspense"), ie = Symbol.for("react.suspense_list"), ce = Symbol.for("react.memo"), L = Symbol.for("react.lazy"), ue = Symbol.for("react.activity"), de = Symbol.for("react.view_transition"), fe = Symbol.for("react.client.reference"), $ = x.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, B = Object.prototype.hasOwnProperty, me = Array.isArray, Y = console.createTask ? console.createTask : function() {
       return null;
     };
-    g = {
+    x = {
       react_stack_bottom_frame: function(e) {
         return e();
       }
     };
-    var W, U = {}, B = g.react_stack_bottom_frame.bind(
-      g,
-      d
-    )(), q = Y(E(d)), J = {};
-    P.Fragment = n, P.jsx = function(e, t, o) {
-      var l = 1e4 > L.recentlyCreatedOwnerStacks++;
-      if (l) {
-        var R = Error.stackTraceLimit;
+    var J, q = {}, V = x.react_stack_bottom_frame.bind(
+      x,
+      f
+    )(), G = Y(p(f)), H = {};
+    O.Fragment = o, O.jsx = function(e, t, s) {
+      var c = 1e4 > $.recentlyCreatedOwnerStacks++;
+      if (c) {
+        var b = Error.stackTraceLimit;
         Error.stackTraceLimit = 10;
         var v = Error("react-stack-top-frame");
-        Error.stackTraceLimit = R;
-      } else v = B;
-      return x(
+        Error.stackTraceLimit = b;
+      } else v = V;
+      return E(
         e,
         t,
-        o,
+        s,
         !1,
         v,
-        l ? Y(E(e)) : q
+        c ? Y(p(e)) : G
       );
-    }, P.jsxs = function(e, t, o) {
-      var l = 1e4 > L.recentlyCreatedOwnerStacks++;
-      if (l) {
-        var R = Error.stackTraceLimit;
+    }, O.jsxs = function(e, t, s) {
+      var c = 1e4 > $.recentlyCreatedOwnerStacks++;
+      if (c) {
+        var b = Error.stackTraceLimit;
         Error.stackTraceLimit = 10;
         var v = Error("react-stack-top-frame");
-        Error.stackTraceLimit = R;
-      } else v = B;
-      return x(
+        Error.stackTraceLimit = b;
+      } else v = V;
+      return E(
         e,
         t,
-        o,
+        s,
         !0,
         v,
-        l ? Y(E(e)) : q
+        c ? Y(p(e)) : G
       );
     };
-  })()), P;
+  })()), O;
 }
-var X;
-function xe() {
-  return X || (X = 1, process.env.NODE_ENV === "production" ? I.exports = ge() : I.exports = ve()), I.exports;
+var K;
+function je() {
+  return K || (K = 1, process.env.NODE_ENV === "production" ? C.exports = Ee() : C.exports = Te()), C.exports;
 }
-var r = xe();
-const { Title: Te, Paragraph: _e } = K;
-function Re(c) {
-  const m = { IN_APP: "blue", EMAIL: "purple", SMS: "green", WEBHOOK: "orange" };
-  return /* @__PURE__ */ r.jsx(C, { color: m[c] || "default", children: c || "—" });
+var r = je();
+const { Title: be, Paragraph: _e } = U;
+function ke(i) {
+  const l = { IN_APP: "blue", EMAIL: "purple", SMS: "green", WEBHOOK: "orange" };
+  return /* @__PURE__ */ r.jsx(I, { color: l[i] || "default", children: i || "—" });
 }
-function be() {
-  const [c, m] = f([]), [u, E] = f(1), [s, d] = f(20), [p, y] = f(0), [j, k] = f(!1), [x, T] = f(null), _ = async () => {
-    k(!0);
+function Re() {
+  const [i, l] = m([]), [d, p] = m(1), [n, f] = m(20), [h, y] = m(0), [R, S] = m(!1), [E, T] = m(null), j = async () => {
+    S(!0);
     try {
-      const a = await F.templatePage(u, s), h = (a == null ? void 0 : a.records) || (a == null ? void 0 : a.list) || (a == null ? void 0 : a.data) || [];
-      m(Array.isArray(h) ? h : []), y((a == null ? void 0 : a.total) || h.length), T(null);
+      const a = await M.templatePage(d, n), g = (a == null ? void 0 : a.records) || (a == null ? void 0 : a.list) || (a == null ? void 0 : a.data) || [];
+      l(Array.isArray(g) ? g : []), y((a == null ? void 0 : a.total) || g.length), T(null);
     } catch (a) {
       T((a == null ? void 0 : a.message) || String(a));
     } finally {
-      k(!1);
+      S(!1);
     }
   };
-  H(() => {
-    _();
-  }, [u, s]);
-  const g = [
+  W(() => {
+    j();
+  }, [d, n]);
+  const x = [
     { title: "code", dataIndex: "code", key: "code", width: 160 },
     { title: "名称", dataIndex: "name", key: "name", width: 200, ellipsis: !0 },
-    { title: "渠道", dataIndex: "channel", key: "channel", width: 100, render: Re },
+    { title: "渠道", dataIndex: "channel", key: "channel", width: 100, render: ke },
     { title: "标题模板", dataIndex: "titleTemplate", key: "title", ellipsis: !0 },
     { title: "内容模板", dataIndex: "contentTemplate", key: "content", ellipsis: !0 },
     {
@@ -326,63 +327,63 @@ function be() {
       dataIndex: "enabled",
       key: "enabled",
       width: 80,
-      render: (a) => a ? /* @__PURE__ */ r.jsx(C, { color: "green", children: "启用" }) : /* @__PURE__ */ r.jsx(C, { color: "default", children: "停用" })
+      render: (a) => a ? /* @__PURE__ */ r.jsx(I, { color: "green", children: "启用" }) : /* @__PURE__ */ r.jsx(I, { color: "default", children: "停用" })
     }
   ];
   return /* @__PURE__ */ r.jsxs("div", { children: [
-    /* @__PURE__ */ r.jsxs(Q, { style: { marginBottom: 16 }, children: [
-      /* @__PURE__ */ r.jsx(Te, { level: 4, style: { margin: 0 }, children: "消息模板" }),
-      /* @__PURE__ */ r.jsx(ee, { icon: /* @__PURE__ */ r.jsx(Z, {}), onClick: _, loading: j, children: "刷新" })
+    /* @__PURE__ */ r.jsxs(z, { style: { marginBottom: 16 }, children: [
+      /* @__PURE__ */ r.jsx(be, { level: 4, style: { margin: 0 }, children: "消息模板" }),
+      /* @__PURE__ */ r.jsx(ee, { icon: /* @__PURE__ */ r.jsx(Q, {}), onClick: j, loading: R, children: "刷新" })
     ] }),
     /* @__PURE__ */ r.jsx(_e, { type: "secondary", children: "站内信 / 邮件 / 短信模板清单（/msg/template/list）。" }),
-    x && /* @__PURE__ */ r.jsx(te, { type: "error", showIcon: !0, style: { marginBottom: 16 }, message: "后端未连接", description: x }),
-    /* @__PURE__ */ r.jsx(O, { children: /* @__PURE__ */ r.jsx(
-      re,
+    E && /* @__PURE__ */ r.jsx(re, { type: "error", showIcon: !0, style: { marginBottom: 16 }, message: "后端未连接", description: E }),
+    /* @__PURE__ */ r.jsx(k, { children: /* @__PURE__ */ r.jsx(
+      te,
       {
-        rowKey: (a, h) => a.id || a.code || h,
-        dataSource: c,
-        columns: g,
-        loading: j,
+        rowKey: (a, g) => a.id || a.code || g,
+        dataSource: i,
+        columns: x,
+        loading: R,
         size: "small",
         pagination: {
-          current: u,
-          pageSize: s,
-          total: p,
+          current: d,
+          pageSize: n,
+          total: h,
           showSizeChanger: !0,
-          onChange: (a, h) => {
-            E(a), d(h);
+          onChange: (a, g) => {
+            p(a), f(g);
           }
         }
       }
     ) })
   ] });
 }
-const { Title: je, Paragraph: ke } = K;
-function we(c) {
-  const m = { SENT: "green", PENDING: "gold", FAILED: "red", CANCELED: "default" };
-  return /* @__PURE__ */ r.jsx(C, { color: m[c] || "default", children: c || "—" });
+const { Title: Se, Paragraph: we } = U;
+function Ae(i) {
+  const l = { SENT: "green", PENDING: "gold", FAILED: "red", CANCELED: "default" };
+  return /* @__PURE__ */ r.jsx(I, { color: l[i] || "default", children: i || "—" });
 }
-function Se() {
-  const [c, m] = f([]), [u, E] = f(null), [s, d] = f(1), [p, y] = f(20), [j, k] = f(0), [x, T] = f(!1), [_, g] = f(null), a = async () => {
+function Pe() {
+  const [i, l] = m([]), [d, p] = m(null), [n, f] = m(1), [h, y] = m(20), [R, S] = m(0), [E, T] = m(!1), [j, x] = m(null), a = async () => {
     T(!0);
     try {
-      const [n, b] = await Promise.all([F.deliveryPage(s, p), F.deliveryStats().catch(() => null)]), S = (n == null ? void 0 : n.records) || (n == null ? void 0 : n.list) || (n == null ? void 0 : n.data) || [];
-      m(Array.isArray(S) ? S : []), k((n == null ? void 0 : n.total) || S.length), E(b), g(null);
-    } catch (n) {
-      g((n == null ? void 0 : n.message) || String(n));
+      const [o, _] = await Promise.all([M.deliveryPage(n, h), M.deliveryStats().catch(() => null)]), A = (o == null ? void 0 : o.records) || (o == null ? void 0 : o.list) || (o == null ? void 0 : o.data) || [];
+      l(Array.isArray(A) ? A : []), S((o == null ? void 0 : o.total) || A.length), p(_), x(null);
+    } catch (o) {
+      x((o == null ? void 0 : o.message) || String(o));
     } finally {
       T(!1);
     }
   };
-  H(() => {
+  W(() => {
     a();
-  }, [s, p]);
-  const h = [
+  }, [n, h]);
+  const g = [
     { title: "ID", dataIndex: "id", key: "id", width: 80 },
     { title: "收件人", dataIndex: "recipient", key: "recipient", width: 160, ellipsis: !0 },
     { title: "渠道", dataIndex: "channel", key: "channel", width: 100 },
     { title: "模板", dataIndex: "templateCode", key: "tpl", width: 140, ellipsis: !0 },
-    { title: "状态", dataIndex: "status", key: "status", width: 100, render: we },
+    { title: "状态", dataIndex: "status", key: "status", width: 100, render: Ae },
     { title: "重试次数", dataIndex: "retryCount", key: "retry", width: 100 },
     { title: "最后错误", dataIndex: "lastError", key: "err", ellipsis: !0 },
     {
@@ -390,54 +391,98 @@ function Se() {
       dataIndex: "createdAt",
       key: "when",
       width: 160,
-      render: (n) => n ? new Date(n).toLocaleString("zh-CN") : "—"
+      render: (o) => o ? new Date(o).toLocaleString("zh-CN") : "—"
     }
   ];
   return /* @__PURE__ */ r.jsxs("div", { children: [
-    /* @__PURE__ */ r.jsxs(Q, { style: { marginBottom: 16 }, children: [
-      /* @__PURE__ */ r.jsx(je, { level: 4, style: { margin: 0 }, children: "投递清单" }),
-      /* @__PURE__ */ r.jsx(ee, { icon: /* @__PURE__ */ r.jsx(Z, {}), onClick: a, loading: x, children: "刷新" })
+    /* @__PURE__ */ r.jsxs(z, { style: { marginBottom: 16 }, children: [
+      /* @__PURE__ */ r.jsx(Se, { level: 4, style: { margin: 0 }, children: "投递清单" }),
+      /* @__PURE__ */ r.jsx(ee, { icon: /* @__PURE__ */ r.jsx(Q, {}), onClick: a, loading: E, children: "刷新" })
     ] }),
-    /* @__PURE__ */ r.jsx(ke, { type: "secondary", children: "消息投递记录（/msg/delivery/list）+ 全局统计（/msg/delivery/stats）。" }),
-    _ && /* @__PURE__ */ r.jsx(te, { type: "error", showIcon: !0, style: { marginBottom: 16 }, message: "后端未连接", description: _ }),
-    u && /* @__PURE__ */ r.jsxs(ye, { gutter: 16, style: { marginBottom: 16 }, children: [
-      /* @__PURE__ */ r.jsx(z, { span: 8, children: /* @__PURE__ */ r.jsx(O, { children: /* @__PURE__ */ r.jsx(D, { title: "已发送", value: u.sent || 0, valueStyle: { color: "#3f8600" } }) }) }),
-      /* @__PURE__ */ r.jsx(z, { span: 8, children: /* @__PURE__ */ r.jsx(O, { children: /* @__PURE__ */ r.jsx(D, { title: "待投递", value: u.pending || 0, valueStyle: { color: "#faad14" } }) }) }),
-      /* @__PURE__ */ r.jsx(z, { span: 8, children: /* @__PURE__ */ r.jsx(O, { children: /* @__PURE__ */ r.jsx(D, { title: "失败", value: u.failed || 0, valueStyle: { color: "#cf1322" } }) }) })
+    /* @__PURE__ */ r.jsx(we, { type: "secondary", children: "消息投递记录（/msg/delivery/list）+ 全局统计（/msg/delivery/stats）。" }),
+    j && /* @__PURE__ */ r.jsx(re, { type: "error", showIcon: !0, style: { marginBottom: 16 }, message: "后端未连接", description: j }),
+    d && /* @__PURE__ */ r.jsxs(ne, { gutter: 16, style: { marginBottom: 16 }, children: [
+      /* @__PURE__ */ r.jsx(N, { span: 8, children: /* @__PURE__ */ r.jsx(k, { children: /* @__PURE__ */ r.jsx(F, { title: "已发送", value: d.sent || 0, valueStyle: { color: "#3f8600" } }) }) }),
+      /* @__PURE__ */ r.jsx(N, { span: 8, children: /* @__PURE__ */ r.jsx(k, { children: /* @__PURE__ */ r.jsx(F, { title: "待投递", value: d.pending || 0, valueStyle: { color: "#faad14" } }) }) }),
+      /* @__PURE__ */ r.jsx(N, { span: 8, children: /* @__PURE__ */ r.jsx(k, { children: /* @__PURE__ */ r.jsx(F, { title: "失败", value: d.failed || 0, valueStyle: { color: "#cf1322" } }) }) })
     ] }),
-    /* @__PURE__ */ r.jsx(O, { children: /* @__PURE__ */ r.jsx(
-      re,
+    /* @__PURE__ */ r.jsx(k, { children: /* @__PURE__ */ r.jsx(
+      te,
       {
-        rowKey: (n, b) => n.id || b,
-        dataSource: c,
-        columns: h,
-        loading: x,
+        rowKey: (o, _) => o.id || _,
+        dataSource: i,
+        columns: g,
+        loading: E,
         size: "small",
         scroll: { x: 1e3 },
         pagination: {
-          current: s,
-          pageSize: p,
-          total: j,
+          current: n,
+          pageSize: h,
+          total: R,
           showSizeChanger: !0,
-          onChange: (n, b) => {
-            d(n), y(b);
+          onChange: (o, _) => {
+            f(o), y(_);
           }
         }
       }
     ) })
   ] });
 }
-const Ce = [
-  { key: "/templates", icon: /* @__PURE__ */ r.jsx(he, {}), label: "消息模板" },
-  { key: "/delivery", icon: /* @__PURE__ */ r.jsx(Ee, {}), label: "投递记录" }
-], Ne = [
-  { path: "templates", Component: be },
-  { path: "delivery", Component: Se }
+const { Title: Oe, Paragraph: Ie } = U;
+function Ce() {
+  const i = ve(), [l, d] = m(null);
+  W(() => {
+    const n = localStorage.getItem("userInfo");
+    if (n)
+      try {
+        d(JSON.parse(n));
+      } catch {
+        d({ name: n });
+      }
+  }, []);
+  const p = Ne.filter((n) => n.key !== "/z-msg/home");
+  return /* @__PURE__ */ r.jsxs("div", { children: [
+    /* @__PURE__ */ r.jsx(k, { style: { marginBottom: 16, background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)", border: "none" }, children: /* @__PURE__ */ r.jsxs(z, { direction: "vertical", size: 4, style: { color: "#fff" }, children: [
+      /* @__PURE__ */ r.jsxs(Oe, { level: 3, style: { color: "#fff", margin: 0 }, children: [
+        "欢迎",
+        l != null && l.name ? `，${l.name}` : ""
+      ] }),
+      /* @__PURE__ */ r.jsx(Ie, { style: { color: "rgba(255,255,255,0.85)", margin: 0 }, children: "z-msg 消息中心 管理台" }),
+      (l == null ? void 0 : l.role) && /* @__PURE__ */ r.jsx(I, { style: { marginTop: 8, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none" }, children: l.role })
+    ] }) }),
+    /* @__PURE__ */ r.jsx(ne, { gutter: [16, 16], children: p.map((n) => /* @__PURE__ */ r.jsx(N, { xs: 24, sm: 12, md: 12, lg: 8, children: /* @__PURE__ */ r.jsx(k, { hoverable: !0, onClick: () => i(n.key), style: { borderTop: "3px solid #7c3aed" }, children: /* @__PURE__ */ r.jsxs(z, { align: "start", size: 12, children: [
+      /* @__PURE__ */ r.jsx("div", { style: {
+        width: 44,
+        height: 44,
+        borderRadius: 8,
+        flexShrink: 0,
+        background: "rgba(124,58,237,0.08)",
+        color: "#7c3aed",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 20
+      }, children: n.icon }),
+      /* @__PURE__ */ r.jsxs("div", { style: { minWidth: 0 }, children: [
+        /* @__PURE__ */ r.jsx("div", { style: { fontSize: 15, fontWeight: 600, color: "#0f172a" }, children: n.label }),
+        /* @__PURE__ */ r.jsx("div", { style: { fontSize: 12, color: "#94a3b8", marginTop: 2 }, children: n.key })
+      ] })
+    ] }) }) }, n.key)) })
+  ] });
+}
+const Ne = [
+  { key: "/z-msg/home", label: "首页", icon: /* @__PURE__ */ r.jsx(ge, {}) },
+  { key: "/z-msg/templates", label: "消息模板", icon: /* @__PURE__ */ r.jsx(ye, {}) },
+  { key: "/z-msg/delivery", label: "投递记录", icon: /* @__PURE__ */ r.jsx(xe, {}) }
+], Fe = [
+  { path: "/z-msg/home", Component: Ce },
+  { path: "/z-msg/templates", Component: Re },
+  { path: "/z-msg/delivery", Component: Pe }
 ];
 export {
-  Se as DeliveryLogs,
-  be as TemplateList,
-  $e as configureMsg,
-  Ce as menuItems,
-  Ne as routeTable
+  Pe as DeliveryLogs,
+  Re as TemplateList,
+  Ue as configureMsg,
+  Ne as menuItems,
+  Fe as routeTable
 };
