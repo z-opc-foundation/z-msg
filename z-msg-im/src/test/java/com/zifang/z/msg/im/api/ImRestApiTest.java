@@ -111,8 +111,10 @@ public class ImRestApiTest extends ImSpringTestSupport {
      * 而这条会话刚刚才由同一个前端创建成功——现象和权限 bug 一模一样，排查方向从一开始就是错的。
      * 出字符串之后，前端不需要知道这件事存在，也就没有"要记得用 BigInt"这种隐藏要求。
      * <p>
-     * 摘掉实体上的 {@code @JsonSerialize(using = ToStringSerializer.class)} 会红在这里
-     * （{@link #idOf} 判形状 + 下面那句逐字符比对判往返）。
+     * 这条形状如今由 {@code z-boot-web-starter} 的 {@code GlobalJacksonConfig}
+     * 统一提供（它把所有 Long 都出成字符串），实体上原来逐字段挂的
+     * {@code @JsonSerialize(using = ToStringSerializer.class)} 已随之删除 ——
+     * 那是冗余，不是承重。{@link ImLongShapeTest} 把这条依赖钉住。
      */
     @Test
     public void conversationIdSurvivesAJavaScriptStyleRoundTrip() {

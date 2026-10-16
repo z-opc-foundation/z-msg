@@ -1,7 +1,5 @@
 package com.zifang.z.msg.im.domain.model;
 
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
 import java.time.LocalDateTime;
 
@@ -16,18 +14,15 @@ import java.time.LocalDateTime;
 public class ImConversationView {
 
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
     private String convType;
     private String tenantCode;
     private String title;
     private String avatar;
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long ownerUserId;
     private Long lastMsgSeq;
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long lastMsgId;
     private String lastMsgPreview;
     private Integer memberCount;

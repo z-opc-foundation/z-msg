@@ -282,10 +282,25 @@ public abstract class ImSpringTestSupport {
         assertEquals(200, codeOf(resp), what + " 的业务 code 应为 200: " + resp.getBody());
     }
 
-    /** 从 JSON 数字里取 long（Jackson 会按大小给 Integer/Long）。 */
+    /**
+     * 取一个整数值，**不关心线上是数字还是字符串**。
+     * <p>
+     * 线上如今所有 Long 都是字符串：{@code z-boot-web-starter} 的 {@code GlobalJacksonConfig}
+     * 通过 {@code spring.factories} 自动登记，把 Long 一律出成字符串（实体上原来逐字段挂的
+     * {@code ToStringSerializer} 已随之删除，那是冗余不是承重）。而 {@link #idOf} 关心的
+     * 恰恰是另一件事——它要断言的正是「这个 id 不是数字」。
+     * <p>
+     * 所以两类断言必须分开：要<b>比大小</b>的用这个；要<b>钉形状</b>的用 {@link #idOf}。
+     * 早先这里只认 Number，{@code GlobalJacksonConfig} 落地之后 {@code seq} / {@code total}
+     * 这些从没有标注解的字段也成了字符串，四条 REST 用例因此长红——那不是回归，是助手过时了。
+     */
     protected static long longOf(Object raw) {
-        assertTrue(raw instanceof Number, "期望数字，实际 " + (raw == null ? "null" : raw.getClass()) + " " + raw);
-        return ((Number) raw).longValue();
+        if (raw instanceof Number) {
+            return ((Number) raw).longValue();
+        }
+        assertTrue(raw instanceof String,
+                "期望整数值，实际 " + (raw == null ? "null" : raw.getClass()) + " " + raw);
+        return Long.parseLong(((String) raw).trim());
     }
 
     /**
@@ -295,7 +310,9 @@ public abstract class ImSpringTestSupport {
      * 浏览器 {@code JSON.parse} 会把它舍进 double（{@code 2103885891501236225} →
      * {@code ...200}），前端拿舍过的值去拼 {@code room:<id>} 或回传 REST，症状是
      * "刚建好的会话 403 无权访问"——而这个 id 在服务端从未存在过。
-     * 哪天有人把 {@code ToStringSerializer} 摘掉，红的是这里，不是前端。
+     * <p>
+     * 哪天有人把 {@code z-boot-web-starter} 降到不含 {@code GlobalJacksonConfig} 的版本，
+     * 红的是这里，不是前端（见 {@link com.zifang.z.msg.im.api.ImLongShapeTest}）。
      */
     protected static long idOf(Object raw) {
         assertTrue(raw instanceof String,

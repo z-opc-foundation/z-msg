@@ -3,8 +3,6 @@ package com.zifang.z.msg.im.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
-import com.fasterxml.jackson.databind.ser.std.ToStringSerializer;
 
 import java.time.LocalDateTime;
 
@@ -19,15 +17,12 @@ public class ImMessageDO {
 
     @TableId(type = IdType.ASSIGN_ID)
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long id;
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long conversationId;
     private Long seq;
     private String clientMsgId;
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
-    @JsonSerialize(using = ToStringSerializer.class)
     private Long senderUserId;
     /**
      * TEXT / IMAGE / FILE / AUDIO / SYS
