@@ -102,18 +102,16 @@
             <artifactId>log4j-api</artifactId>
         </dependency>
 
-        <!-- host 桥接类: CodeChannelSender SPI 来自 z-ctc-web，运行期由宿主供 -->
+        <!-- host 桥接类只 implements z-ctc-common 里的 CodeChannelSender SPI。
+             刻意不引 z-ctc-web: 它对本模块是 provided, 而 all-in-one 拆解后
+             z-opc main 的 fat jar 里已无 z-ctc-web, 实现类 implements 一个读不到的
+             接口 ⇒ ConfigurationClassParser 读父类字节码 FileNotFoundException,
+             容器连 bean 都建不起来就死。契约必须落在两边都必有的 common 上。 -->
         <dependency>
             <groupId>io.github.yuku123</groupId>
-            <artifactId>z-ctc-web</artifactId>
+            <artifactId>z-ctc-common</artifactId>
+            <version>1.0.3</version>
             <scope>provided</scope>
-            <exclusions>
-                <!-- 反向桥与 SLF4J 2.x 绑定: 与本工程的 log4j-slf4j-impl + slf4j 1.7.36 栈相冲 -->
-                <exclusion>
-                    <groupId>org.apache.logging.log4j</groupId>
-                    <artifactId>log4j-slf4j2-impl</artifactId>
-                </exclusion>
-            </exclusions>
         </dependency>
 
         <!-- @ConditionalOnProperty 注解的宿主端自动装配 -->

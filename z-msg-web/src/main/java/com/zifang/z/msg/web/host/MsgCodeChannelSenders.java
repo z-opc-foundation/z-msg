@@ -1,6 +1,6 @@
 package com.zifang.z.msg.web.host;
 
-import com.zifang.ctc.web.service.CodeChannelSender;
+import com.zifang.ctc.common.spi.CodeChannelSender;
 import com.zifang.z.msg.api.EmailMessage;
 import com.zifang.z.msg.api.MessageGateway;
 import com.zifang.z.msg.api.SmsMessage;
@@ -14,8 +14,8 @@ import java.util.Map;
 /**
  * 验证码下发通道 — 桥接 z-msg MessageGateway (短信/邮件).
  * <p>
- * z-ctc (基础设施层) 不依赖 z-msg (业务层), 只暴露 {@link CodeChannelSender} SPI;
- * main-starter 聚合所有模块, 在这里把 z-msg 的短信/邮件通道接进来.
+ * z-ctc (基础设施层) 不依赖 z-msg (业务层), 只在 z-ctc-common 暴露 {@link CodeChannelSender} SPI;
+ * 宿主 (4A 中心那类同时装了 z-ctc-web 的形态) 在这里把 z-msg 的短信/邮件通道接进来.
  * z-msg 默认 provider 是 Mock (日志输出), 生产切 Aliyun/SMTP 只需改 yml 配置.
  */
 public final class MsgCodeChannelSenders {
