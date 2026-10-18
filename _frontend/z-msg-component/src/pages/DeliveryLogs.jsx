@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react'
 import {Alert, Col, Row, Statistic, Tag} from 'antd'
 import {msgApi, DELIVERY_STATUS} from '../services/api'
-import {PagedTable} from '@/common/components/ui'
+import {PagedTable} from '@yuku123/z-frontend-common/ui'
 
 function StatsBanner() {
     const [stats, setStats] = useState(null)

@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react'
 import {Alert, Card, Table, Tag} from 'antd'
 import {msgApi} from '../services/api'
-import {EmptyState, PageHeader} from '@/common/components/ui'
+import {EmptyState, PageHeader} from '@yuku123/z-frontend-common/ui'
 
 const READ = {0: {text: '未读', color: 'blue'}, 1: {text: '已读', color: 'default'}}
 

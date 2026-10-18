@@ -1,33 +1,20 @@
 package com.zifang.z.msg.core.json;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zifang.util.json.JsonUtil;
 
 /**
  * z-msg 统一 JSON 工具 (1.1.0)
  * <p>
- * 实时帧的 payload、webhook body、IM 消息体都要序列化；直接用 new ObjectMapper()
- * 会带上 Boot 默认策略（FAIL_ON_UNKNOWN_PROPERTIES=true + 输出全部 null 字段），
- * 对端多一个字段就把整条链路打挂，所以这里固定成宽松 + 精简的专用实例。
+ * 实时帧的 payload、webhook body、IM 消息体都要序列化；这里用 z-util 的 JsonUtil
+ * 做宽松 + 精简的序列化：反序列化本就忽略未知字段，序列化统一走 toJsonExcludingNulls，
+ * 避免对端多一个字段就把整条链路打挂。
  * <p>
- * LocalDateTime 之类的时间字段依赖 jackson-datatype-jsr310；它由宿主（z-boot-web-starter）
- * 带入，本模块不硬依赖，因此用 findAndRegisterModules 探测式注册——没有时退化为
- * {@code toString()} 字符串，不至于抛 InvalidDefinitionException。
+ * LocalDateTime 之类的时间字段由 z-util-json 自己的序列化器处理，识别不到时退化为
+ * {@code toString()} 字符串，不至于抛异常。
  */
 public final class MsgJson {
 
-    private static final ObjectMapper MAPPER = new ObjectMapper()
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-            .findAndRegisterModules();
-
     private MsgJson() {
-    }
-
-    public static ObjectMapper mapper() {
-        return MAPPER;
     }
 
     public static String toJson(Object value) {
@@ -38,9 +25,9 @@ public final class MsgJson {
             return (String) value;
         }
         try {
-            return MAPPER.writeValueAsString(value);
-        } catch (JsonProcessingException e) {
-            throw new IllegalArgumentException("z-msg 序列化失败: " + e.getOriginalMessage(), e);
+            return JsonUtil.toJsonExcludingNulls(value);
+        } catch (RuntimeException e) {
+            throw new IllegalArgumentException("z-msg 序列化失败: " + e.getMessage(), e);
         }
     }
 
@@ -49,8 +36,8 @@ public final class MsgJson {
             return null;
         }
         try {
-            return MAPPER.readValue(json, type);
-        } catch (Exception e) {
+            return JsonUtil.fromJson(json, type);
+        } catch (RuntimeException e) {
             throw new IllegalArgumentException("z-msg 反序列化失败: " + e.getMessage(), e);
         }
     }
@@ -64,8 +51,12 @@ public final class MsgJson {
             return null;
         }
         try {
-            return MAPPER.readValue(json, java.util.Map.class);
-        } catch (Exception e) {
+            Object plain = JsonUtil.toPlainValue(JsonUtil.parse(json));
+            if (!(plain instanceof java.util.Map)) {
+                return null;
+            }
+            return (java.util.Map<String, Object>) plain;
+        } catch (RuntimeException e) {
             return null;
         }
     }

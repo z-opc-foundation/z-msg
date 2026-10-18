@@ -1,6 +1,6 @@
 import {Tag} from 'antd'
 import {msgApi, TEMPLATE_STATUS} from '../services/api'
-import {PagedTable} from '@/common/components/ui'
+import {PagedTable} from '@yuku123/z-frontend-common/ui'
 
 export default function TemplateList() {
     return (

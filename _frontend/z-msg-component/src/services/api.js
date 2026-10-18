@@ -1,4 +1,4 @@
-import request from '@/common'
+import request from '@yuku123/z-frontend-common'
 
 /**
  * z-msg (消息中心) 管理接口 — 全部对应主进程 8888 上实测已注册的 /api/msg/**（2026-09-24 经 /actuator/mappings 核对）。

@@ -4,8 +4,8 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import com.zifang.util.json.JsonUtil;
+import com.zifang.util.json.define.TypeReference;
 import com.zifang.z.msg.api.FanOutResult;
 import com.zifang.z.msg.core.channel.ChannelRouter;
 import com.zifang.z.msg.core.domain.entity.MsgBatchTaskDO;
@@ -54,7 +54,6 @@ public class MsgBatchSendService {
     public static final int STATUS_CANCELLED = 5;
 
     private static final Logger log = LogManager.getLogger(MsgBatchSendService.class);
-    private static final ObjectMapper MAPPER = new ObjectMapper();
 
     /**
      * 已请求取消的任务 id；执行循环逐条检查。进程重启后丢失，所以同时把 status=5 落库，
@@ -85,13 +84,13 @@ public class MsgBatchSendService {
         task.setFailedCount(0);
         task.setStatus(STATUS_PENDING);
         try {
-            task.setParamsJson(MAPPER.writeValueAsString(params));
-        } catch (Exception ex) {
+            task.setParamsJson(JsonUtil.toJson(params));
+        } catch (RuntimeException ex) {
             task.setParamsJson("{}");
         }
         try {
-            task.setReceiversJson(MAPPER.writeValueAsString(receivers));
-        } catch (Exception ex) {
+            task.setReceiversJson(JsonUtil.toJson(receivers));
+        } catch (RuntimeException ex) {
             task.setReceiversJson("[]");
         }
         MessageTemplateEngine.TemplateEntry entry = templateEngine.lookup(bizType, channel, null);
@@ -312,9 +311,9 @@ public class MsgBatchSendService {
             return new HashMap<>();
         }
         try {
-            return MAPPER.readValue(json, new TypeReference<Map<String, String>>() {
+            return JsonUtil.fromJson(json, new TypeReference<Map<String, String>>() {
             });
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return new HashMap<>();
         }
     }
@@ -325,9 +324,9 @@ public class MsgBatchSendService {
             return new java.util.ArrayList<>();
         }
         try {
-            return MAPPER.readValue(json, new TypeReference<List<Map<String, String>>>() {
+            return JsonUtil.fromJson(json, new TypeReference<List<Map<String, String>>>() {
             });
-        } catch (Exception e) {
+        } catch (RuntimeException e) {
             return new java.util.ArrayList<>();
         }
     }
