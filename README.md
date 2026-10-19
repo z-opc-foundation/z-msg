@@ -164,7 +164,8 @@ z:
 ```
 
 **凭据必须经环境变量注入，禁止写进 yml / jar / 镜像层**（演示宿主 `application.yml` 里那把
-`ticket-secret` 是 `demo-only-…` 占位，生产必须覆盖、不要复用）：
+`ticket-secret` 已按 001_凭证管理规范 改成占位符 `${MSG_TICKET_SECRET:changeit}`，
+生产必须用 `MSG_TICKET_SECRET` 覆盖、不要复用默认值）：
 
 | 环境变量 | 用途 |
 |----------|------|

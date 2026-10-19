@@ -32,8 +32,8 @@ z-msg:
   enabled: true
   realtime:
     # 没配这把密钥时 /api/msg/inbox/ws-token 与握手一律 503（fail closed，不签弱密钥票）。
-    # 演示值就写在仓库里，生产必须从环境注入，且不要复用这一串。
-    ticket-secret: demo-only-0123456789abcdef-change-me
+    # 001_凭证管理规范：字面量密钥一律走环境变量占位符（示例仓默认 changeit，生产必须注入真值，且不要复用）。
+    ticket-secret: ${MSG_TICKET_SECRET:changeit}
     ticket-ttl-seconds: 60
   ws:
     enabled: true
