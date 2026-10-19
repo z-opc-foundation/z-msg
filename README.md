@@ -24,10 +24,10 @@
 | **仓库** | `z-msg` |
 | **Maven 坐标** | `io.github.yuku123:z-msg:${revision}`（聚合 POM） |
 | **当前版本** | `1.2.2`（根 POM `<revision>`，CI-friendly versions + flatten-maven-plugin） |
-| **父项目** | `io.github.yuku123:z-boot-parent:1.0.21`（`<relativePath/>` 留空，parent 在 repo1 不在磁盘；**发布件经 flatten `oss` 模式剥掉 parent，消费者拿到的是自包含 raw pom**） |
+| **父项目** | `io.github.yuku123:z-boot-parent:1.1.0`（`<relativePath/>` 留空，parent 在 repo1 不在磁盘；**发布件经 flatten `oss` 模式剥掉 parent，消费者拿到的是自包含 raw pom**） |
 | **Maven Central** | 已发布：`z-msg`(parent) / `z-msg-api` / `z-msg-core` / `z-msg-web` / `z-msg-ws` / `z-msg-im` / `z-msg-channels` 的 **1.2.0 / 1.2.1 / 1.2.2** 均可从 repo1 拉取；`z-msg-example` 各版均 404（见下「发布状态」） |
 | **默认端口** | 库本身无固定端口；演示宿主 `z-msg-example` 监听 `18099`；WS 端点路径 `/api/msg/ws` |
-| **运行口径** | Java 8 · Spring Boot 2.7.18（口径由 `z-boot-parent` → `z-boot-dependencies` 地板供给） |
+| **运行口径** | Java 8 · Spring Boot 2.7.18（口径由 `z-boot-parent:1.1.0` 供给） |
 | **最近更新** | 2026-09-30 |
 
 ---
@@ -58,12 +58,16 @@
 > `op=auth` 带内换票（§4）、`ready` 的 `ops`/`limits` 自描述（§4）、腾讯云短信 `TencentSmsSender`
 > 与极光推送 `JPushSender`（§7）、IM 的线格式（§6：id 由数字改字符串、`kind=chat` 帧的 `createdTime`
 > 由 epoch 毫秒改 ISO 字符串）。这些提交都在 `1.2.1` 的发布 commit 之前合入，`1.2.1`/`1.2.2` 的构件字节里都有。
-> 唯一仍在"主干但未另发版本号"的，是 parent 从 `1.0.19` 抬到 `1.0.21` 这一刀（`ecf405f`，未 bump revision）——
-> 它只动构建口径、不动发布形状（flatten 后仍是自包含 pom），对消费者无感。
+> 唯一仍在"主干但未另发版本号"的，是 parent 抬号这两刀 —— `1.0.19` → `1.0.21`（`ecf405f`）
+> → `1.1.0`（`6294977`，火车制 1.1.0 接纳）—— 两刀都只动 `<parent>`、**都没 bump revision**：
+> 它们只动构建口径、不动发布形状（flatten 后仍是自包含 pom），对消费者无感。
 
-> ⚠️ **`z-boot-msg-starter` 只能带你走一半。** 2026-09-30 实测 repo1：starter 最新是 `1.0.21`，
-> 它的 pom 里的 z-msg 依赖**只有一条** — `z-msg-web:1.2.2`。这一版 pin 对了（收件箱读侧的归属校验、
-> `/history` 的同步判定量都拿得到）。但 **`ws` / `im` / `channels` 三个坐标一个都不在聚合里**，
+> ⚠️ **`z-boot-msg-starter` 只能带你走一半。** 2026-10-20 实测 repo1：starter 的 `latest`/`release`
+> 都是 **`1.1.1`**（在架版本 `1.0.11`–`1.0.23`、`1.0.25`、`1.1.0`、`1.1.1`；**`1.0.24` 不在架**），
+> 它的 pom 里的 z-msg 依赖**只有一条** — `z-msg-web:1.2.2`。`1.0.21` / `1.1.0` / `1.1.1` 三份 pom 的
+> `<dependencies>` 逐字相同（一条 `z-msg-web:1.2.2` + 一条 `log4j-slfj2-impl` exclusion），**抬号没有扩范围**。
+> 这一版 pin 对了（收件箱读侧的归属校验、`/history` 的同步判定量都拿得到）。但
+> **`ws` / `im` / `channels` 三个坐标一个都不在聚合里**，
 > 所以下面"这层能替你干什么"表里的 WebSocket、聊天室、微信式 IM、外部渠道那四行，
 > 必须直接引 `z-msg-ws`、`z-msg-im`、`z-msg-channels` 才拿得到——starter 的聚合范围兜不住这三件事。
 
@@ -88,7 +92,7 @@
 
 ```
 z-msg/
-├── pom.xml                  # 聚合 parent：继承 z-boot-parent:1.0.21，${revision}=1.2.2 + flatten(oss)
+├── pom.xml                  # 聚合 parent：继承 z-boot-parent:1.1.0，${revision}=1.2.2 + flatten(oss)
 ├── _doc/001_arch/04-protocol.md  # 实时协议逐帧规范（本仓唯一 _doc 文件）
 ├── z-msg-api/               # 纯 SPI 与常量，零实现零 Spring
 ├── z-msg-core/              # 默认 provider（mock/SMTP）+ ChannelRouter + 限流 + 重试 + 模板 + 站内信 + 票签发 + 7 表 DDL
@@ -124,7 +128,7 @@ z-msg/
 | 层级 | 技术（均来自 POM / 地板实测） |
 |------|------|
 | 语言 / 运行时 | Java 8（全组织口径 1.8） |
-| 框架 | Spring Boot 2.7.18（由 `z-boot-parent:1.0.21` → `z-boot-dependencies` 地板统一供给，模块 POM 不再字面钉） |
+| 框架 | Spring Boot 2.7.18（由 `z-boot-parent:1.1.0` → `z-boot-dependencies` 地板统一供给，模块 POM 不再字面钉） |
 | 持久层 | MyBatis-Plus 3.5.7（地板 `mybatis-plus.version`）+ z-boot-datasource-starter |
 | 数据库 | MySQL 8（生产，走 `z.base.db.msg.*`）/ H2（测试与演示内存库） |
 | 实时 | Spring `spring-boot-starter-websocket` 标准 `TextWebSocketHandler`（不引额外 IO 框架） |
@@ -195,9 +199,9 @@ mvn -B -o -pl z-msg-example spring-boot:run   # 演示宿主，端口 18099
 mvn -B -o clean verify
 ```
 
-第三方版本一律由 `z-boot-parent` → `z-boot-dependencies`（地板）+ `z-boot-fleet`（兄弟仓权威表）
+第三方版本一律由 `z-boot-parent:1.1.0` 供给（第三方地板与兄弟仓权威表均已并入 parent 自身）
 供给，模块 POM 里不应再出现字面版本钉；若报找不到版本，先确认本地/镜像能解析到
-`io.github.yuku123:z-boot-parent:1.0.21`。
+`io.github.yuku123:z-boot-parent:1.1.0`。
 
 ---
 
@@ -695,7 +699,7 @@ profile 的 `<excludeArtifacts>` 把它挡在 bundle 外，`repo1` 上 1.2.0/1.2
 
 | 项目 | 关系 |
 |---|---|
-| `z-boot` | BOM 与 starter 聚合（本仓 parent `z-boot-parent:1.0.21`；`z-boot-msg-starter` 最新 `1.0.21` 实测 pin `z-msg-web:1.2.2`，聚合里只有 `z-msg-web` 这一条，`ws`/`im`/`channels` 要直接引，见开头那条警告） |
+| `z-boot` | BOM 与 starter 聚合（本仓 parent `z-boot-parent:1.1.0`；`z-boot-msg-starter` 最新 `1.1.1` 实测 pin `z-msg-web:1.2.2`，聚合里只有 `z-msg-web` 这一条，`ws`/`im`/`channels` 要直接引，见开头那条警告） |
 | `z-ctc` | 宿主认证来源：`MsgPrincipalResolver` 生产实现接它的 JWT |
 | `z-mq` | 同系列消息队列；z-msg 刻意不依赖它。`RealtimeTransport` 本仓库只有一个实现（`WsSessionRegistry`，单机内存），多节点部署要宿主自己接一层桥 |
 | `z-opc` | 下游消费者（站内信、模板管理页、演示宿主前端） |
@@ -712,21 +716,20 @@ _Maintained by the z-opc-foundation organization._
 
 ## 文档目录
 
-本仓文档未完全收口到规范的 `_doc/{001_arch,002_deploy,003_script,004_skill}` 分层目录：目前 `_doc/` 下只有一个
-**平铺的**实时协议文件（文件名也不带 `_doc` 规范的编号前缀）。下面链接的都是实测真实存在的文件：
+本项目文档统一收口在 `_doc/` 下（八类固定编号表，桶按需存在）；下面链接的都是实测真实存在的文件：
 
-- [`_doc/`](_doc/) — 文档目录（当前非分层，只有一个文件）
-  - [`001_WS_PROTOCOL.md`](_doc/001_arch/04-protocol.md) — z-msg WebSocket 实时协议逐帧规范（握手 / 帧格式 /
+- [`_doc/001_arch/`](_doc/001_arch/) — 架构、接口、协议、路线图
+  - [`00-overview.md`](_doc/001_arch/00-overview.md) — 项目总览：模块架构、核心功能、对外集成与上下游、
+    技术特点、目录结构
+  - [`04-protocol.md`](_doc/001_arch/04-protocol.md) — z-msg WebSocket 实时协议逐帧规范（握手 / 帧格式 /
     `op=auth` 带内换票 / topic 命名 / 三态授权 / 错误码 / 资源上限 / 断线并发 / 最小前端）。该文件对"哪些改动
     已发布"的旁注以本 README「发布状态」为准：`op=auth`、`ready` 自描述、IM 字符串 id、`createdTime` ISO
     均已随 1.2.1/1.2.2 上中央仓库。
+- [`_doc/003_script/`](_doc/003_script/) — 发布与运维脚本:
+  - [`deploy_maven_center.sh`](_doc/003_script/deploy_maven_center.sh) — 一键发布 Maven Central（子命令 `publish` / `verify` / `gpg-init` / `readme`）
+  - [`install-settings.sh`](_doc/003_script/install-settings.sh) — 把 Central 凭证（`CENTRAL_USERNAME` / `CENTRAL_TOKEN`）写入 `~/.m2/settings.xml`
 
 其它文档按模块就近放置（不在 `_doc/` 下）：
 
 - [`z-msg-channels/README.md`](z-msg-channels/README.md) — 渠道 provider / 签名 / 超时 / 未支持与待核对项
 - [`z-msg-example/README.md`](z-msg-example/README.md) — 五分钟跑起来、宿主四个文件
-
-发布脚本**平铺在仓库根**（未收口到 [`_doc/003_script/`](_doc/003_script/)，如实写明）：
-
-- [`_doc/003_script/deploy_maven_center.sh`](_doc/003_script/deploy_maven_center.sh) — 一键发布 Maven Central（子命令 `publish` / `verify` / `gpg-init` / `readme`）
-- [`_doc/003_script/install-settings.sh`](_doc/003_script/install-settings.sh) — 把 Central 凭证（`CENTRAL_USERNAME` / `CENTRAL_TOKEN`）写入 `~/.m2/settings.xml`
