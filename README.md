@@ -128,7 +128,7 @@ z-msg/
 | 层级 | 技术（均来自 POM / 地板实测） |
 |------|------|
 | 语言 / 运行时 | Java 8（全组织口径 1.8） |
-| 框架 | Spring Boot 2.7.18（由 `z-boot-parent:1.1.0` → `z-boot-dependencies` 地板统一供给，模块 POM 不再字面钉） |
+| 框架 | Spring Boot 2.7.18（由 `z-boot-parent:1.1.0` 统一供给，模块 POM 不再字面钉） |
 | 持久层 | MyBatis-Plus 3.5.7（地板 `mybatis-plus.version`）+ z-boot-datasource-starter |
 | 数据库 | MySQL 8（生产，走 `z.base.db.msg.*`）/ H2（测试与演示内存库） |
 | 实时 | Spring `spring-boot-starter-websocket` 标准 `TextWebSocketHandler`（不引额外 IO 框架） |
