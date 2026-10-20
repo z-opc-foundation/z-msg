@@ -1,4 +1,11 @@
-import request from '@yuku123/z-frontend-common'
+// ⚠ 必须用**具名**导入拿 axios 实例，不能用默认导入。
+//   '@yuku123/z-frontend-common' 的默认导出是「桶对象」
+//   {AppLayout, StatusTag, LoginPage, ErrorBoundary, request, authRequest, createRequest}
+//   （0.1.1 起的桶契约，老调用方 import zfc from '...' 不断），不是 axios 实例。
+//   默认导入拿到的桶上没有 .get/.post ⇒ 一调就抛
+//   "TypeError: Xt.get is not a function"（线上 /msg/inbox 白屏就是这个，2026-10-20 实测）。
+//   axios 实例在具名导出 `request` 上（= createRequest()）。
+import { request } from '@yuku123/z-frontend-common'
 
 /**
  * z-msg (消息中心) 管理接口 — 全部对应主进程 8888 上实测已注册的 /api/msg/**（2026-09-24 经 /actuator/mappings 核对）。
