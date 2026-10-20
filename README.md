@@ -28,7 +28,7 @@
 | **Maven Central** | 已发布：`z-msg`(parent) / `z-msg-api` / `z-msg-core` / `z-msg-web` / `z-msg-ws` / `z-msg-im` / `z-msg-channels` 的 **1.2.0 / 1.2.1 / 1.2.2** 均可从 repo1 拉取；`z-msg-example` 各版均 404（见下「发布状态」） |
 | **默认端口** | 库本身无固定端口；演示宿主 `z-msg-example` 监听 `18099`；WS 端点路径 `/api/msg/ws` |
 | **运行口径** | Java 8 · Spring Boot 2.7.18（口径由 `z-boot-parent:1.1.0` 供给） |
-| **最近更新** | 2026-09-30 |
+| **最近更新** | 2026-10-20 |
 
 ---
 
@@ -482,6 +482,12 @@ FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers
 | DELETE | `/delete-all` |
 | GET | `/ws-token` |
 
+> ⚠ **响应里的 `long` 字段是字符串**（`id`、分页的 `total` / `size` / `current` / `pages`、未读数
+> `unread-count` 都是）。这是 `z-boot-web-starter` 的 `GlobalJacksonConfig` 定的**全局**口径
+> （`module.addSerializer(Long.class, new LongToStringSerializer(false))`，防 JS 精度丢失），
+> 不是本仓自己加的注解 —— `z-msg-im` 那边逐字段的 `@JsonSerialize(using = ToStringSerializer.class)`
+> 已因这条全局口径**删掉**（那是冗余不是承重）。消费方按字符串读，别写 `(Number)` 强转。
+
 **IM**（`/api/msg/im/...`，全 POST，全要求已认证）：
 
 | 前缀 | 端点 |
@@ -663,13 +669,15 @@ mvn -B -o clean verify       # 8 模块全量校验
 | example | 大厅 A 发言进 B 的帧、未放行 topic 被拒而大厅同连接可发、站内信三处同时命中、未登录 401、首页真伺服、同 cookie jar 两个标签页仍是两个人、私聊面板那条端到端（真 Tomcat + 真 H2 + 两条真 socket）、`MsgAdminSurfaceCensusTest`（全量装配宿主里逐条过闸门，钉住"拦下 / 放行"两份清单） |
 
 > 主干工作树上一次全量 `mvn -B -o clean verify`（2026-09-27 那棵树）为 **224 例、0 失败 0 跳过**；
-> 本次改动后 `mvn -o clean test`（2026-10-06，JDK 8，8 模块全跑）为 **238 例、0 失败 0 错误 0 跳过**
+> 2026-10-06 那轮 `mvn -o clean test`（JDK 8，8 模块全跑）为 **238 例、0 失败 0 错误 0 跳过**
 > （227 → 238，多出的 11 例即 `ChannelRouterIdemSlotTest` 7 条 + `DeliveryLogIdemIndexH2Test` 4 条；
 > 更早一轮多出的 3 例是 `ChannelRouterIdempotencyTest`；`z-msg-ws` / `z-msg-im` / `z-msg-example` 三个模块
 > 此前在本机因 `~/.m2` 缓存缺 `central=` 记录而无法离线解析，一直是被 SKIPPED 的，这轮才真跑到）
-> （core 40 / channels 82 / web 13 / ws 39 / im 56 / example 8）。此后仅有 pom/依赖口径改动与一支
-> charset 测试修补（`9ca2948`），未重跑，例数不变。`1.2.1`/`1.2.2` 的发布树是在含 op=auth、`ready`
-> 自描述、IM 字符串 id、`createdTime` ISO、腾讯云·极光 sender 那批守卫之后重发的；本 README 未对
+> （core 40 / channels 82 / web 13 / ws 39 / im 56 / example 8）。
+> **2026-10-20 复跑**（`mvn -o test`，JDK 8，8 模块全跑）：**260 例、0 失败 0 错误 0 跳过**
+> （core 58 / channels 82 / web 13 / ws 39 / im 60 / example 8；比 10-06 那轮多 22 例，
+> 其中 10 例是本次新增的 README 自守卫，其余 12 例是期间其它改动带来的）。
+> `1.2.1`/`1.2.2` 的发布树是在含 op=auth、`ready` 自描述、IM 字符串 id、`createdTime` ISO、腾讯云·极光 sender 那批守卫之后重发的；本 README 未对
 > 发布件精确到个位数地重测，具体跑绿以本地 `mvn verify` 为准。
 
 这些不是"跑过一遍绿了"就完事：每条新增守卫都做过变异验证（摘掉守卫必须变红，再按 `md5` 逐字节还原复跑）。
