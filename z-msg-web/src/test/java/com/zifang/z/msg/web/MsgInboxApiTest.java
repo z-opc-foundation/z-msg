@@ -190,7 +190,7 @@ public class MsgInboxApiTest {
         Map<String, Object> data = dataOf(resp);
         assertEquals(2, records(data).size(), "size=2 必须真的只回 2 条");
         // 1.0.0 没挂分页插件：total 恒 0、records 是全表。这里两头都钉住。
-        assertTrue(((Number) data.get("total")).longValue() >= 5L,
+        assertTrue(asLong(data.get("total")) >= 5L,
                 "total 必须是真实条数而不是 0，实际: " + data.get("total"));
     }
 
@@ -308,14 +308,31 @@ public class MsgInboxApiTest {
                 : (List<Map<String, Object>>) (List<?>) raw;
     }
 
+    /**
+     * 取 long 值：响应里的 long 字段**是字符串** ——
+     * `z-boot-web-starter` 的 `GlobalJacksonConfig` 全局注册了
+     * {@code module.addSerializer(Long.class, new LongToStringSerializer(false))}
+     * （Long 一律序列化成字符串，防 JS 精度丢失）。
+     * z-msg-im 那边的测试已随之更新，本类还停在「Long 就是 Number」的旧世界里，
+     * 于是 {@code (Number) row.get("id")} 直接 ClassCastException。
+     *
+     * <p>断言本身不变：这里只负责把「数字 / 数字字符串」都读成同一个数。</p>
+     */
+    private static long asLong(Object v) {
+        if (v instanceof Number) {
+            return ((Number) v).longValue();
+        }
+        return Long.parseLong(String.valueOf(v).trim());
+    }
+
     private long unreadCount(long userId) {
         Object n = rawData(exchange("/api/msg/inbox/unread-count", HttpMethod.GET, userId));
-        return n == null ? -1L : ((Number) n).longValue();
+        return n == null ? -1L : asLong(n);
     }
 
     private boolean isUnread(Long msgId, long userId) {
         for (Map<String, Object> row : pageRecords("/api/msg/inbox/list", userId)) {
-            if (msgId.equals(((Number) row.get("id")).longValue())) {
+            if (msgId.equals(asLong(row.get("id")))) {
                 return ((Number) row.get("isRead")).intValue() == 0;
             }
         }
@@ -337,7 +354,7 @@ public class MsgInboxApiTest {
     private Long idOfTitle(List<Map<String, Object>> rows, String title) {
         for (Map<String, Object> row : rows) {
             if (title.equals(row.get("title"))) {
-                return ((Number) row.get("id")).longValue();
+                return asLong(row.get("id"));
             }
         }
         return null;
