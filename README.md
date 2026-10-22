@@ -465,6 +465,47 @@ FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers
 
 ---
 
+## 🧭 渠道归属二分法：通知型归本仓，会话型归 z-bot（这两块别混）
+
+> 判据只有一条：**这条渠道需不需要「接住对方的回话」。**
+
+| 类型 | 判据 | 本仓里的对应物 | 归属 |
+|---|---|---|---|
+| **通知型** | 发出去不指望回话 | `SMS`（`aliyun` / `tencent`）、`EMAIL`（`smtp`）、`IN_APP`（`db`）、`WEBHOOK`（`http`）、群机器人（`IM_WECOM` / `IM_DINGTALK` / `IM_FEISHU` 的 `robot` provider、`IM_SLACK` 的 `bot` provider） | **z-msg（本仓）** —— 渠道屏蔽层 |
+| **会话型** | 要接住对方的回话 | 本仓**不接**（本仓没有外部 IM 的入站面） | **z-bot 原生**（短期） |
+
+⇒ 本仓的出站面全是「发出去」这一半：供应商切换一行 yml、投递日志（`z_msg_delivery_log`）、限流重试、
+模板审核流、幂等占位都在这边。会话那半（入站验签解密、TurnLease 防多通道抢话、`state.db` 会话状态）
+在 z-bot 那边 ⇒ **别把会话型通道往本仓沉**：那会与本仓既有能力全套重叠 ⇒ 重复建设。
+
+**三条边界**：
+
+1. **`z-msg-im` 不是 IM 渠道屏蔽层。** `z-msg-im` 是**本仓自己的服务端会话域**（会话/成员/消息/已读回执，
+   `seq` CAS 分配与增量同步，走 `z-msg-ws` 帧线），管的是「**本系统内部**人与人 / 与 agent 的聊天」。
+   它与「把外部 IM（飞书 / 钉钉）接进来」是**两个维度**：本仓的群机器人 provider（`robot` / `bot`）是
+   **只出不进**的通知型通道，会话型入站归 z-bot。⇒ 「agent 接飞书」不需要 `z-msg-im`；
+   本仓有 `z-msg-im` 也不构成 z-bot 会话通道该下沉的理由。
+2. **agent 之间的内部协作消息不归本仓**（团队内部总线 `z-agent-msg` 是独立问题域：高频、会话隔离、
+   topic 固定而 session 动态）；也别反向把那条总线当渠道屏蔽层用。
+3. **调用方不引本仓的 jar 进自己的 JVM**（z-bot 是独立进程）⇒ 通知型出站只走**跨进程 HTTP**。
+
+**通知型出站接本仓的唯一那条缝**：
+
+| 端点 | 形状 | 开关 |
+|---|---|---|
+| `POST /api/msg/send` | 单条 Message 直填：指定 `channel` + `receiver`（或 `userId`）+ **运行时全文** `content`（可选 `subject` / `linkUrl` / `bizType` / `idempotencyKey`） | `z-msg.web.send-endpoint-enabled`（缺省 `false` ⇒ **真 HTTP 403** + 业务 `code:403`） |
+
+它与 `POST /api/msg/publish`（事件式，正文由模板渲染）**不是一回事**：`send` 吃的是「这一次的全文」。
+两个开关**各自独立**：关 `send` 不影响 `publish`，关 `publish` 也不影响 `send`
+（回归钉在 `MsgPublishGateDisabledTest` / `MsgPublishGateEnabledTest` / `MsgSendEndpointDisabledTest` /
+`MsgSendEndpointEnabledTest`；实测矩阵见
+`002_项目需求/003_定时任务空间/evidence/TASK-20261012-021/`）。
+
+调用方（z-bot 的 `zmsg` 通道）把回执里的 `msgId` 记进自己的送达台账 ⇒ **两本账用 msgId 串起来**
+（join key 是它写过去的 `idempotencyKey` = 台账义务 id）。
+
+---
+
 ## 🧭 REST 端点全表
 
 响应统一 `com.zifang.util.core.meta.Result`：`{ success, code, message, data }`（字段名是 `message`，不是 `msg`）。
