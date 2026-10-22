@@ -1,4 +1,4 @@
-import { j as e, I as d, a as c, b as n, d as m, M as g } from "./MsgApp-D0-hzgrw.js";
+import { j as e, I as d, a as c, b as n, d as m, M as g } from "./MsgApp-6s4LXk9h.js";
 import { HomeOutlined as p, MailOutlined as h, SendOutlined as f } from "@ant-design/icons";
 import { Typography as x, Card as s, Space as i, Tag as y, Row as b, Col as j } from "antd";
 import { useNavigate as u } from "react-router-dom";
