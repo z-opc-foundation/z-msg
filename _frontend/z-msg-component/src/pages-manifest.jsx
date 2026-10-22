@@ -1,4 +1,4 @@
-import { HomeOutlined, MailOutlined, SendOutlined } from '@ant-design/icons'
+import { HomeOutlined, MailOutlined, ReadOutlined, SendOutlined } from '@ant-design/icons'
 import TemplateList from './pages/TemplateList'
 import DeliveryLogs from './pages/DeliveryLogs'
 
@@ -9,6 +9,7 @@ import HomePage from './pages/HomePage'
 import Inbox from './pages/Inbox.jsx'
 import BatchTasks from './pages/BatchTasks.jsx'
 import MsgApp from './pages/MsgApp.jsx'
+import ComponentDocPage from './pages/ComponentDoc.jsx'
 
 /** 菜单 + 路由清单（lead 008 §10/§14/§16 批量落地）。App 壳在 suit 侧组装。 */
 export const appMeta = { title: 'z-msg 消息中心', short: 'z-msg' }
@@ -17,6 +18,7 @@ export const menuItems = [
     { key: '/z-msg/home', label: '首页', icon: <HomeOutlined /> },
     { key: '/z-msg/templates', label: '消息模板', icon: <MailOutlined /> },
     { key: '/z-msg/delivery', label: '投递记录', icon: <SendOutlined /> },
+    { key: '/z-msg/docs', label: '组件文档', icon: <ReadOutlined /> },
 ]
 
 export const routes = [
@@ -25,9 +27,12 @@ export const routes = [
     { path: '/z-msg/templates', title: '消息模板', order: 2, Component: TemplateList },
     { path: '/z-msg/delivery', title: '投递记录', order: 3, Component: DeliveryLogs },
     { path: '/z-msg/batch', title: '批量任务', order: 4, Component: BatchTasks },
+    { path: '/z-msg/docs', Component: ComponentDocPage },
     { path: '/z-msg/:rest*', Component: MsgApp },
     { path: '/z-msg/delivery', Component: DeliveryLogs },
 ]
 
 export { default as HomePage } from './pages/HomePage'
 export { default as LoginPage } from './pages/LoginPage'
+// 主壳接线用：文档页统一以 ComponentDocPage 这个名字从主入口导出。
+export { default as ComponentDocPage } from './pages/ComponentDoc.jsx'

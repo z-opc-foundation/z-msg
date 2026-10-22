@@ -15,6 +15,7 @@ export {
     LoginPage,
     TemplateList,
     DeliveryLogs,
+    ComponentDocPage,
     appMeta,
     menuItems,
     routes,
