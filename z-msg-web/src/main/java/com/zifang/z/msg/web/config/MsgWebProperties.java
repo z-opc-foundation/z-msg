@@ -20,6 +20,15 @@ public class MsgWebProperties {
     private boolean publishEndpointEnabled = false;
 
     /**
+     * 服务间用的直发端点（{@code POST /api/msg/send}），默认关，见 {@code MsgSendController}。
+     * <p>
+     * 与 {@link #publishEndpointEnabled} 同款姿势：默认关、宿主确认调用方在网络边界内之后才打开。
+     * 两者管的是同一类"能往任意收件人发消息"的服务间入口，区别只是 publish 收的是
+     * 业务事件（模板渲染 + 站内信兜底），send 收的是运行时全文（直填渠道 + 收件人）。
+     */
+    private boolean sendEndpointEnabled = false;
+
+    /**
      * 管理面总开关（模板 / 批量任务 / 投递日志），默认关，判定在 {@link AdminEndpointGate}。
      * <p>
      * 这三组端点不带任何身份：template 的 8 个映射能增删改并审批模板，batch 的 4 个能提交群发任务，
@@ -58,5 +67,13 @@ public class MsgWebProperties {
 
     public void setAdminEndpointsEnabled(boolean v) {
         this.adminEndpointsEnabled = v;
+    }
+
+    public boolean isSendEndpointEnabled() {
+        return sendEndpointEnabled;
+    }
+
+    public void setSendEndpointEnabled(boolean v) {
+        this.sendEndpointEnabled = v;
     }
 }

@@ -510,12 +510,16 @@ FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers
 | GET | `/api/msg/channel/list` | ❌ 无需身份；实测不回传任何密钥 |
 | GET | `/api/msg/channel/detail?channel=` | ❌ |
 | POST | `/api/msg/publish?eventType=&userId=` | ❌ **默认关**（`z-msg.web.publish-endpoint-enabled=false`）。关着时实测 HTTP 200 + 业务 `code:403`，不是 HTTP 403 |
+| POST | `/api/msg/send` | ❌ **默认关**（`z-msg.web.send-endpoint-enabled=false`）。关着时实测**真 HTTP 403** + 业务 `code:403`；开着时真投递并返回 `msgId` |
 | POST | `/api/msg/template/list` · `/api/msg/template`（建）· `/{id}`（GET/PUT/DELETE）· `/{id}/approve` · `/{id}/reject` · `/cache/refresh` | ❌ **默认关**：8 个映射一律真 HTTP 403 |
 | POST | `/api/msg/batch/submit` · `/list` · `/{id}/cancel`，GET `/api/msg/batch/{id}` | ❌ 同上 |
 | POST | `/api/msg/delivery/list` | ❌ 同上 |
 | GET **和** POST | `/api/msg/delivery/stats` | ❌ 同上。GET 由 `MessageController` 声明、POST 由 `MsgDeliveryLogController` 声明；闸门按**路径**判，不会因为"不长在它自己的 controller 里"而漏出去 |
 
-`/api/msg/send` 不存在。管理面那 12 条路径不是手抄的：`MsgAdminSurfaceCensusTest` 在示例宿主（web + im 全量装配）
+`/api/msg/send` 是后加的**直发端点**（指定渠道 + 指定收件人 + 运行时全文），门禁与 publish 同款
+（显式开关、默认关），但关着时回**真 HTTP 403**（publish 那套 HTTP 200 + 业务码是历史包袱，
+它自己保持不变，回归钉在 `MsgPublishGateDisabledTest` / `MsgPublishGateEnabledTest`）。
+管理面那 12 条路径不是手抄的：`MsgAdminSurfaceCensusTest` 在示例宿主（web + im 全量装配）
 里把活的 handler mapping 逐条过一遍闸门判定，与两份钉死的清单对账——少拦一条或多放一条，测试就红。
 
 ---
@@ -528,6 +532,7 @@ FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers
 |---|---|---|
 | `z-msg.web.trusted-header-enabled` | `false` | 打开后 `X-Msg-User-Id` 就是身份——**必须**确认上游网关会覆盖/剥离客户端自带的同名头 |
 | `z-msg.web.publish-endpoint-enabled` | `false` | 服务间事件投递端点，开了要自己保证调用方可信。关着时是 HTTP 200 + 业务 `code:403` |
+| `z-msg.web.send-endpoint-enabled` | `false` | 服务间**直发**端点（`POST /api/msg/send`，指定渠道 + 收件人 + 运行时全文），开了要自己保证调用方可信。关着时是**真 HTTP 403** + 业务 `code:403` |
 | `z-msg.web.admin-endpoints-enabled` | `false` | 模板/批量/投递日志三组管理面。关着时是**真 HTTP 403** + `Result` 正文（这些请求根本没进 controller） |
 | `z-msg.realtime.ticket-secret` | `""` | 空则 fail closed，不签弱密钥票：`/ws-token` 回业务 `code:503`（HTTP 仍 200），WS 握手由拦截器给真 HTTP 503 |
 | `z-msg.ws.public-topics` | `[]` | 只影响"订得到哪些非本人 topic"，全部不表态时按拒绝处理 |
@@ -619,7 +624,8 @@ FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers
 | `realtime.ticket-audience` | `z-msg-ws` | |
 
 `z-msg.web.*`：`trusted-header-enabled=false`、`trusted-header-name=X-Msg-User-Id`、
-`publish-endpoint-enabled=false`、`admin-endpoints-enabled=false`（判定只在 `AdminEndpointGate.isAdminPath` 一处：
+`publish-endpoint-enabled=false`、`send-endpoint-enabled=false`、
+`admin-endpoints-enabled=false`（判定只在 `AdminEndpointGate.isAdminPath` 一处：
 按路径段对齐，`/api/msg/templates` 不算管理面）。
 
 `z-msg.ws.*`：`enabled=true`、`path=/api/msg/ws`、`allowed-origins=[]`、`public-topics=[]`、

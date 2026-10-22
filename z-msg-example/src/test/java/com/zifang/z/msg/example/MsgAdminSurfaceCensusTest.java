@@ -30,6 +30,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * </ul>
  * 只统计 {@code com.zifang.z.msg.web}/{@code .im}：宿主自己的 controller（这里是 {@code /demo/*}）
  * 归宿主自己判，库不该替它表态。
+ * <p>
+ * {@code /api/msg/send}（TASK-20261012-019 新增的直发端点）在 {@code OPEN} 这一侧：
+ * 它<b>不是</b>管理面（管的是模板 / 批量 / 投递日志），它有自己的开关
+ * {@code z-msg.web.send-endpoint-enabled}，默认关、关着回真 HTTP 403。
+ * 闸门不管它，但它同样必须被登记在案 —— 新端点忘了登记，这里的对账就会红。
  */
 @SpringBootTest(classes = MsgExampleApplication.class,
         webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -56,6 +61,7 @@ public class MsgAdminSurfaceCensusTest {
     /** 其余全部：身份来自 MsgPrincipalResolver 的用户面，以及通道自省。 */
     private static final Set<String> OPEN = sorted(
             "/api/msg/publish",
+            "/api/msg/send",
             "/api/msg/channel/list",
             "/api/msg/channel/detail",
             "/api/msg/inbox/list",

@@ -51,6 +51,9 @@ z-msg:
     trusted-header-enabled: false
     # 那个端点能往任意 userId 的收件箱塞消息，演示里改用 /demo/notify（身份来自 session）
     publish-endpoint-enabled: false
+    # 直发端点（POST /api/msg/send，指定渠道 + 收件人 + 运行时全文），同样默认关（一律 403）。
+    # 演示页用不到它，别在生产的宿主里长期开着。
+    send-endpoint-enabled: false
     # 模板/批量/投递日志三组管理面端点，默认关（一律 403）。演示页只用得到收件箱，
     # 真要演示后台再打开，别在生产的宿主里长期开着。
     admin-endpoints-enabled: false
