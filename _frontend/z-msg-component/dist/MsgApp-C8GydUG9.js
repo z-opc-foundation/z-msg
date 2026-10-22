@@ -1,16 +1,16 @@
 import fe, { useState as j, useEffect as H } from "react";
 import { Routes as me, Route as b, Navigate as xe } from "react-router-dom";
-import { Alert as C, Card as pe, Table as _e, Tag as h, Row as he, Col as R, Statistic as w, Progress as ye } from "antd";
+import { Alert as C, Card as pe, Tag as h, Row as _e, Col as R, Statistic as w, Progress as he } from "antd";
 import { request as E } from "@yuku123/z-frontend-common";
-import { PageHeader as J, EmptyState as be, PagedTable as $ } from "@yuku123/z-frontend-common/ui";
-const v = {
+import { PageHeader as J, ListTable as ye, PagedTable as $ } from "@yuku123/z-frontend-common/ui";
+const g = {
   inbox: (t, n) => E.get("/msg/list", { params: { userId: t, limit: n } }),
   templatePage: (t, n) => E.post("/msg/template/list", { page: t, size: n }),
   deliveryPage: (t, n) => E.post("/msg/delivery/list", { page: t, size: n }),
   deliveryStats: () => E.get("/msg/delivery/stats"),
   batchPage: (t, n) => E.post("/msg/batch/list", { page: t, size: n })
 };
-function Ee() {
+function be() {
   const t = (l) => {
     try {
       return JSON.parse(localStorage.getItem(l) || "null");
@@ -19,21 +19,21 @@ function Ee() {
     }
   }, n = t("userInfo"), i = n && (n.id ?? n.userId);
   if (i != null && i !== "") return String(i);
-  const f = t("USER_INFO"), s = f && (f.staffId ?? f.jobNumber);
+  const d = t("USER_INFO"), s = d && (d.staffId ?? d.jobNumber);
   return s == null || s === "" ? null : String(s);
 }
-const Te = {
+const Ee = {
   0: { text: "待发送", color: "default" },
   1: { text: "成功", color: "success" },
   2: { text: "失败", color: "error" },
   3: { text: "重试中", color: "processing" }
-}, ge = {
+}, Te = {
   0: { text: "待执行", color: "default" },
   1: { text: "执行中", color: "processing" },
   2: { text: "已完成", color: "success" },
   3: { text: "部分失败", color: "warning" },
   4: { text: "失败", color: "error" }
-}, je = {
+}, ve = {
   0: { text: "草稿", color: "default" },
   1: { text: "启用", color: "success" },
   2: { text: "停用", color: "warning" }
@@ -49,20 +49,20 @@ var S = { exports: {} }, T = {};
  * LICENSE file in the root directory of this source tree.
  */
 var V;
-function ve() {
+function je() {
   if (V) return T;
   V = 1;
   var t = Symbol.for("react.transitional.element"), n = Symbol.for("react.fragment");
-  function i(f, s, l) {
+  function i(d, s, l) {
     var x = null;
     if (l !== void 0 && (x = "" + l), s.key !== void 0 && (x = "" + s.key), "key" in s) {
       l = {};
-      for (var d in s)
-        d !== "key" && (l[d] = s[d]);
+      for (var f in s)
+        f !== "key" && (l[f] = s[f]);
     } else l = s;
     return s = l.ref, {
       $$typeof: t,
-      type: f,
+      type: d,
       key: x,
       ref: s !== void 0 ? s : null,
       props: l
@@ -70,7 +70,7 @@ function ve() {
   }
   return T.Fragment = n, T.jsx = i, T.jsxs = i, T;
 }
-var g = {};
+var v = {};
 /**
  * @license React
  * react-jsx-runtime.development.js
@@ -81,7 +81,7 @@ var g = {};
  * LICENSE file in the root directory of this source tree.
  */
 var B;
-function ke() {
+function ge() {
   return B || (B = 1, process.env.NODE_ENV !== "production" && (function() {
     function t(e) {
       if (e == null) return null;
@@ -148,7 +148,7 @@ function ke() {
         ), n(e);
       }
     }
-    function f(e) {
+    function d(e) {
       if (e === I) return "<>";
       if (typeof e == "object" && e !== null && e.$$typeof === P)
         return "<...>";
@@ -167,15 +167,15 @@ function ke() {
       return Error("react-stack-top-frame");
     }
     function x(e) {
-      if (z.call(e, "key")) {
+      if (D.call(e, "key")) {
         var a = Object.getOwnPropertyDescriptor(e, "key").get;
         if (a && a.isReactWarning) return !1;
       }
       return e.key !== void 0;
     }
-    function d(e, a) {
+    function f(e, a) {
       function o() {
-        D || (D = !0, console.error(
+        M || (M = !0, console.error(
           "%s: `key` is not a prop. Trying to access it will result in `undefined` being returned. If you need to access the same value within the child component, you should pass it as a different prop. (https://react.dev/link/special-props)",
           a
         ));
@@ -187,7 +187,7 @@ function ke() {
     }
     function p() {
       var e = t(this.type);
-      return M[e] || (M[e] = !0, console.error(
+      return z[e] || (z[e] = !0, console.error(
         "Accessing element.ref was removed in React 19. ref is now a regular prop. It will be removed from the JSX Element type in a future release."
       )), e = this.props.ref, e !== void 0 ? e : null;
     }
@@ -237,7 +237,7 @@ function ke() {
               "React.jsx: Static children should always be an array. You are likely explicitly calling React.jsxs or React.jsxDEV. Use the Babel transform instead."
             );
         else Y(u);
-      if (z.call(a, "key")) {
+      if (D.call(a, "key")) {
         u = t(e);
         var y = Object.keys(a).filter(function(de) {
           return de !== "key";
@@ -260,7 +260,7 @@ React keys must be passed directly to JSX without using spread:
         for (var N in a)
           N !== "key" && (o[N] = a[N]);
       } else o = a;
-      return u && d(
+      return u && f(
         o,
         typeof e == "function" ? e.displayName || e.name || "Unknown" : e
       ), Z(
@@ -278,7 +278,7 @@ React keys must be passed directly to JSX without using spread:
     function F(e) {
       return typeof e == "object" && e !== null && e.$$typeof === U;
     }
-    var k = fe, U = Symbol.for("react.transitional.element"), Q = Symbol.for("react.portal"), I = Symbol.for("react.fragment"), K = Symbol.for("react.strict_mode"), ee = Symbol.for("react.profiler"), te = Symbol.for("react.consumer"), re = Symbol.for("react.context"), ne = Symbol.for("react.forward_ref"), ae = Symbol.for("react.suspense"), se = Symbol.for("react.suspense_list"), oe = Symbol.for("react.memo"), P = Symbol.for("react.lazy"), le = Symbol.for("react.activity"), ie = Symbol.for("react.view_transition"), ce = Symbol.for("react.client.reference"), A = k.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, z = Object.prototype.hasOwnProperty, ue = Array.isArray, O = console.createTask ? console.createTask : function() {
+    var k = fe, U = Symbol.for("react.transitional.element"), Q = Symbol.for("react.portal"), I = Symbol.for("react.fragment"), K = Symbol.for("react.strict_mode"), ee = Symbol.for("react.profiler"), te = Symbol.for("react.consumer"), re = Symbol.for("react.context"), ne = Symbol.for("react.forward_ref"), ae = Symbol.for("react.suspense"), se = Symbol.for("react.suspense_list"), oe = Symbol.for("react.memo"), P = Symbol.for("react.lazy"), le = Symbol.for("react.activity"), ie = Symbol.for("react.view_transition"), ce = Symbol.for("react.client.reference"), A = k.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE, D = Object.prototype.hasOwnProperty, ue = Array.isArray, O = console.createTask ? console.createTask : function() {
       return null;
     };
     k = {
@@ -286,11 +286,11 @@ React keys must be passed directly to JSX without using spread:
         return e();
       }
     };
-    var D, M = {}, W = k.react_stack_bottom_frame.bind(
+    var M, z = {}, W = k.react_stack_bottom_frame.bind(
       k,
       l
-    )(), q = O(f(l)), G = {};
-    g.Fragment = I, g.jsx = function(e, a, o) {
+    )(), q = O(d(l)), G = {};
+    v.Fragment = I, v.jsx = function(e, a, o) {
       var c = 1e4 > A.recentlyCreatedOwnerStacks++;
       if (c) {
         var _ = Error.stackTraceLimit;
@@ -304,9 +304,9 @@ React keys must be passed directly to JSX without using spread:
         o,
         !1,
         m,
-        c ? O(f(e)) : q
+        c ? O(d(e)) : q
       );
-    }, g.jsxs = function(e, a, o) {
+    }, v.jsxs = function(e, a, o) {
       var c = 1e4 > A.recentlyCreatedOwnerStacks++;
       if (c) {
         var _ = Error.stackTraceLimit;
@@ -320,30 +320,30 @@ React keys must be passed directly to JSX without using spread:
         o,
         !0,
         m,
-        c ? O(f(e)) : q
+        c ? O(d(e)) : q
       );
     };
-  })()), g;
+  })()), v;
 }
 var X;
-function Re() {
-  return X || (X = 1, process.env.NODE_ENV === "production" ? S.exports = ve() : S.exports = ke()), S.exports;
+function ke() {
+  return X || (X = 1, process.env.NODE_ENV === "production" ? S.exports = je() : S.exports = ge()), S.exports;
 }
-var r = Re();
-const we = { 0: { text: "未读", color: "blue" }, 1: { text: "已读", color: "default" } };
-function Se({ userId: t }) {
-  const [n, i] = j([]), [f, s] = j(!1), [l, x] = j(null);
+var r = ke();
+const Re = { 0: { text: "未读", color: "blue" }, 1: { text: "已读", color: "default" } };
+function we({ userId: t }) {
+  const [n, i] = j([]), [d, s] = j(!1), [l, x] = j(null);
   return H(() => {
     if (!t) return;
-    let d = !1;
-    return s(!0), v.inbox(t, 50).then((p) => {
-      d || (i(p || []), x(null));
+    let f = !1;
+    return s(!0), g.inbox(t, 50).then((p) => {
+      f || (i(p || []), x(null));
     }).catch((p) => {
-      d || (i([]), x(p));
+      f || (i([]), x(p));
     }).finally(() => {
-      d || s(!1);
+      f || s(!1);
     }), () => {
-      d = !0;
+      f = !0;
     };
   }, [t]), t ? /* @__PURE__ */ r.jsxs("div", { children: [
     /* @__PURE__ */ r.jsx(
@@ -353,46 +353,51 @@ function Se({ userId: t }) {
         description: `当前用户 ${t} 的收件箱（数据源 GET /api/msg/list?userId=${t}）`
       }
     ),
-    /* @__PURE__ */ r.jsx(pe, { children: l ? /* @__PURE__ */ r.jsx(
+    l ? /* @__PURE__ */ r.jsx(pe, { children: /* @__PURE__ */ r.jsx(
       C,
       {
         type: "error",
         showIcon: !0,
         message: `站内信读取失败：${l.message || l}`
       }
-    ) : /* @__PURE__ */ r.jsx(
-      _e,
-      {
-        size: "small",
-        rowKey: "id",
-        loading: f,
-        dataSource: n,
-        pagination: { pageSize: 20, showTotal: (d) => `共 ${d} 条` },
-        columns: [
-          { title: "标题", dataIndex: "title", key: "title" },
-          { title: "内容", dataIndex: "content", key: "content", ellipsis: !0 },
-          {
-            title: "事件类型",
-            dataIndex: "event_type",
-            key: "event_type",
-            width: 150,
-            render: (d) => /* @__PURE__ */ r.jsx(h, { children: d })
-          },
-          {
-            title: "已读",
-            dataIndex: "is_read",
-            key: "is_read",
-            width: 90,
-            render: (d) => {
-              const p = we[d] || { text: `未知(${d})`, color: "default" };
-              return /* @__PURE__ */ r.jsx(h, { color: p.color, children: p.text });
-            }
-          },
-          { title: "时间", dataIndex: "created_time", key: "created_time", width: 180 }
-        ],
-        locale: { emptyText: /* @__PURE__ */ r.jsx(be, { title: "收件箱为空", description: "接口返回空列表" }) }
-      }
-    ) })
+    ) }) : (
+      /* 收件箱一次取回最近 50 条、翻页在前端做 ⇒ 走基座 ListTable：
+         分页/过滤/空态三件套由基座统一承接。 */
+      /* @__PURE__ */ r.jsx(
+        ye,
+        {
+          rows: n,
+          rowKey: "id",
+          loading: d,
+          searchKeys: "title,content,event_type",
+          searchPlaceholder: "按标题 / 内容 / 事件类型过滤",
+          emptyTitle: "收件箱为空",
+          emptyDescription: "接口返回空列表",
+          columns: [
+            { title: "标题", dataIndex: "title", key: "title" },
+            { title: "内容", dataIndex: "content", key: "content", ellipsis: !0 },
+            {
+              title: "事件类型",
+              dataIndex: "event_type",
+              key: "event_type",
+              width: 150,
+              render: (f) => /* @__PURE__ */ r.jsx(h, { children: f })
+            },
+            {
+              title: "已读",
+              dataIndex: "is_read",
+              key: "is_read",
+              width: 90,
+              render: (f) => {
+                const p = Re[f] || { text: `未知(${f})`, color: "default" };
+                return /* @__PURE__ */ r.jsx(h, { color: p.color, children: p.text });
+              }
+            },
+            { title: "时间", dataIndex: "created_time", key: "created_time", width: 180 }
+          ]
+        }
+      )
+    )
   ] }) : /* @__PURE__ */ r.jsxs("div", { children: [
     /* @__PURE__ */ r.jsx(J, { title: "站内信" }),
     /* @__PURE__ */ r.jsx(
@@ -406,13 +411,13 @@ function Se({ userId: t }) {
     )
   ] });
 }
-function Ie() {
+function Se() {
   return /* @__PURE__ */ r.jsx(
     $,
     {
       title: "消息模板",
       description: "按渠道/业务类型维护的消息模板（数据源 POST /api/msg/template/list）",
-      load: (t, n) => v.templatePage(t, n),
+      load: (t, n) => g.templatePage(t, n),
       columns: [
         { title: "业务类型", dataIndex: "biz_type", key: "biz_type", width: 160 },
         {
@@ -431,7 +436,7 @@ function Ie() {
           key: "status",
           width: 90,
           render: (t) => {
-            const n = je[t] || { text: `未知(${t})`, color: "default" };
+            const n = ve[t] || { text: `未知(${t})`, color: "default" };
             return /* @__PURE__ */ r.jsx(h, { color: n.color, children: n.text });
           }
         },
@@ -440,14 +445,14 @@ function Ie() {
     }
   );
 }
-function Pe() {
-  const [t, n] = j(null), [i, f] = j(null);
+function Ie() {
+  const [t, n] = j(null), [i, d] = j(null);
   return H(() => {
     let s = !1;
-    return v.deliveryStats().then((l) => {
+    return g.deliveryStats().then((l) => {
       s || n(l);
     }).catch((l) => {
-      s || f(l);
+      s || d(l);
     }), () => {
       s = !0;
     };
@@ -459,7 +464,7 @@ function Pe() {
       style: { marginBottom: 12 },
       message: `投递统计读取失败：${i.message || i}`
     }
-  ) : t ? /* @__PURE__ */ r.jsxs(he, { gutter: 16, style: { marginBottom: 12 }, children: [
+  ) : t ? /* @__PURE__ */ r.jsxs(_e, { gutter: 16, style: { marginBottom: 12 }, children: [
     /* @__PURE__ */ r.jsx(R, { span: 6, children: /* @__PURE__ */ r.jsx(w, { title: "投递总数", value: t.total ?? 0 }) }),
     /* @__PURE__ */ r.jsx(R, { span: 6, children: /* @__PURE__ */ r.jsx(w, { title: "成功", value: t.success ?? 0, valueStyle: { color: "#3f8600" } }) }),
     /* @__PURE__ */ r.jsx(R, { span: 6, children: /* @__PURE__ */ r.jsx(w, { title: "失败", value: t.failed ?? 0, valueStyle: { color: "#cf1322" } }) }),
@@ -473,14 +478,14 @@ function Pe() {
     ) })
   ] }) : null;
 }
-function Ae() {
+function Pe() {
   return /* @__PURE__ */ r.jsx(
     $,
     {
       title: "投递日志",
       description: "每条消息按渠道投递的结果与失败原因（数据源 POST /api/msg/delivery/list + GET /api/msg/delivery/stats）",
-      load: (t, n) => v.deliveryPage(t, n),
-      extra: /* @__PURE__ */ r.jsx(Pe, {}),
+      load: (t, n) => g.deliveryPage(t, n),
+      extra: /* @__PURE__ */ r.jsx(Ie, {}),
       columns: [
         { title: "业务类型", dataIndex: "biz_type", key: "biz_type", width: 140 },
         { title: "渠道", dataIndex: "channel", key: "channel", width: 110, render: (t) => /* @__PURE__ */ r.jsx(h, { children: t }) },
@@ -492,7 +497,7 @@ function Ae() {
           key: "status",
           width: 100,
           render: (t) => {
-            const n = Te[t] || { text: `未知(${t})`, color: "default" };
+            const n = Ee[t] || { text: `未知(${t})`, color: "default" };
             return /* @__PURE__ */ r.jsx(h, { color: n.color, children: n.text });
           }
         },
@@ -511,13 +516,13 @@ function Ae() {
     }
   );
 }
-function Oe() {
+function Ae() {
   return /* @__PURE__ */ r.jsx(
     $,
     {
       title: "批量发送任务",
       description: "批量任务的进度与失败数（数据源 POST /api/msg/batch/list）",
-      load: (t, n) => v.batchPage(t, n),
+      load: (t, n) => g.batchPage(t, n),
       columns: [
         { title: "业务类型", dataIndex: "biz_type", key: "biz_type", width: 150 },
         { title: "渠道", dataIndex: "channel", key: "channel", width: 110, render: (t) => /* @__PURE__ */ r.jsx(h, { children: t }) },
@@ -526,8 +531,8 @@ function Oe() {
           key: "progress",
           width: 160,
           render: (t, n) => {
-            const i = Number(n.total_count) || 0, f = (Number(n.success_count) || 0) + (Number(n.failed_count) || 0);
-            return /* @__PURE__ */ r.jsx(ye, { percent: i ? Math.round(f * 100 / i) : 0, size: "small" });
+            const i = Number(n.total_count) || 0, d = (Number(n.success_count) || 0) + (Number(n.failed_count) || 0);
+            return /* @__PURE__ */ r.jsx(he, { percent: i ? Math.round(d * 100 / i) : 0, size: "small" });
           }
         },
         { title: "总数", dataIndex: "total_count", key: "total_count", width: 70 },
@@ -551,7 +556,7 @@ function Oe() {
           key: "status",
           width: 110,
           render: (t) => {
-            const n = ge[t] || { text: `未知(${t})`, color: "default" };
+            const n = Te[t] || { text: `未知(${t})`, color: "default" };
             return /* @__PURE__ */ r.jsx(h, { color: n.color, children: n.text });
           }
         },
@@ -562,26 +567,26 @@ function Oe() {
     }
   );
 }
-function Fe() {
-  const t = Ee();
+function Ye() {
+  const t = be();
   return /* @__PURE__ */ r.jsxs(me, { children: [
     /* @__PURE__ */ r.jsx(b, { index: !0, element: /* @__PURE__ */ r.jsx(xe, { to: "inbox", replace: !0 }) }),
-    /* @__PURE__ */ r.jsx(b, { path: "inbox", element: /* @__PURE__ */ r.jsx(Se, { userId: t }) }),
-    /* @__PURE__ */ r.jsx(b, { path: "template", element: /* @__PURE__ */ r.jsx(Ie, {}) }),
-    /* @__PURE__ */ r.jsx(b, { path: "delivery", element: /* @__PURE__ */ r.jsx(Ae, {}) }),
-    /* @__PURE__ */ r.jsx(b, { path: "batch", element: /* @__PURE__ */ r.jsx(Oe, {}) })
+    /* @__PURE__ */ r.jsx(b, { path: "inbox", element: /* @__PURE__ */ r.jsx(we, { userId: t }) }),
+    /* @__PURE__ */ r.jsx(b, { path: "template", element: /* @__PURE__ */ r.jsx(Se, {}) }),
+    /* @__PURE__ */ r.jsx(b, { path: "delivery", element: /* @__PURE__ */ r.jsx(Pe, {}) }),
+    /* @__PURE__ */ r.jsx(b, { path: "batch", element: /* @__PURE__ */ r.jsx(Ae, {}) })
   ] });
 }
 export {
-  ge as B,
-  Te as D,
-  Se as I,
-  Fe as M,
-  je as T,
-  Ie as a,
-  Ae as b,
-  Ee as c,
-  Oe as d,
+  Te as B,
+  Ee as D,
+  we as I,
+  Ye as M,
+  ve as T,
+  Se as a,
+  Pe as b,
+  be as c,
+  Ae as d,
   r as j,
-  v as m
+  g as m
 };
