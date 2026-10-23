@@ -46,7 +46,7 @@ import {menuItems, routes, HomePage, LoginPage, TemplateList, DeliveryLogs} from
 
 | 方法 | 路径 | 说明 |
 |---|---|---|
-| GET | `/msg/list` | 站内信列表（query `userId` + `limit`） |
+| GET | `/msg/inbox/list` | 站内信列表（query `page` + `size`，**不带 userId**） |
 | POST | `/msg/template/list` | 消息模板分页（body `page` / `size`） |
 | POST | `/msg/delivery/list` | 投递记录分页（body `page` / `size`） |
 | GET | `/msg/delivery/stats` | 投递统计（总数 / 成功 / 失败） |
@@ -55,17 +55,20 @@ import {menuItems, routes, HomePage, LoginPage, TemplateList, DeliveryLogs} from
 两条容易踩的现实：
 
 - 列表类接口是 **POST + body**，分页参数名是 `page` / `size`（**不是** z-meta 那套 `pageNum` / `pageSize`）。
-- 站内信接口要求 `userId`，取当前登录用户（见下）。
+- 站内信接口**不带 `userId`**：身份由服务端从 SSO 凭证解析（宿主注册的 `MsgPrincipalResolver`），
+  服务端在 SQL 的 WHERE 里做归属过滤。⚠ **不要**把 `userId` 塞回 query —— 那是 z-msg 1.0.0
+  「改一下 query 就能读别人收件箱」的越权成因；旧路径 `/msg/list` 也已于 1.1.0 下线（生产实测 404）。
 
 ## 四、页面说明
 
 ### 4.1 收件箱（`pages/Inbox.jsx`）
 
-拉当前登录用户的站内信（`limit=50`），空态文案「收件箱为空」。
+拉当前登录用户的站内信（`page=1` / `size=50`），空态文案「收件箱为空」。
 
-`userId` 取自 `currentUserId()`：依次读 localStorage 的 `userInfo`（取 `id` / `userId`）与
-`USER_INFO`（取 `staffId` / `jobNumber`）。**两个键都读不到时一个请求都不发**，页面提示
-「GET /api/msg/list 需要 userId … 请重新登录」。
+⚠ **本页不传 `userId`**（2026-10-23 起）：请求打 `GET /api/msg/inbox/list`，
+身份由服务端从 SSO 凭证解析；客户端自报身份不再被采信。
+响应是 `Result<IPage<InAppMessage>>`，页面取 `data.records` 渲染。
+⚠ 列表**没有正文列**：新契约的服务端投影刻意不返回 `content`（省一列 BIGTEXT）。
 
 ### 4.2 消息模板（`pages/TemplateList.jsx`）
 
@@ -91,7 +94,7 @@ import {menuItems, routes, HomePage, LoginPage, TemplateList, DeliveryLogs} from
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
 | axios 实例 | 基座 `request`（`createRequest()`） | `baseURL='/api'`，token 键 `token`，`Authorization: Bearer` 自动注入 |
-| 当前用户 id | `currentUserId()` | 依次读 `userInfo` → `USER_INFO`，都取不到返回 `null` |
+| 当前用户 id | `currentUserId()`（**已废弃**） | 依次读 `userInfo` → `USER_INFO`，都取不到返回 `null`；收件箱不再使用它 |
 | 状态映射 | `DELIVERY_STATUS` / `BATCH_STATUS` / `TEMPLATE_STATUS` | 数字码 → 文案 + antd 色 |
 
 ## 六、已知限制
