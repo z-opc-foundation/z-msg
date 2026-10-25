@@ -1,4 +1,4 @@
-import { HomeOutlined, MailOutlined, ReadOutlined, SendOutlined } from '@ant-design/icons'
+import { HomeOutlined, InboxOutlined, MailOutlined, ReadOutlined, SendOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import TemplateList from './pages/TemplateList'
 import DeliveryLogs from './pages/DeliveryLogs'
 
@@ -16,8 +16,10 @@ export const appMeta = { title: 'z-msg 消息中心', short: 'z-msg' }
 
 export const menuItems = [
     { key: '/z-msg/home', label: '首页', icon: <HomeOutlined /> },
+    { key: '/z-msg/inbox', label: '收件箱', icon: <InboxOutlined /> },
     { key: '/z-msg/templates', label: '消息模板', icon: <MailOutlined /> },
     { key: '/z-msg/delivery', label: '投递记录', icon: <SendOutlined /> },
+    { key: '/z-msg/batch', label: '批量任务', icon: <UnorderedListOutlined /> },
     { key: '/z-msg/docs', label: '组件文档', icon: <ReadOutlined /> },
 ]
 
@@ -29,7 +31,6 @@ export const routes = [
     { path: '/z-msg/batch', title: '批量任务', order: 4, Component: BatchTasks },
     { path: '/z-msg/docs', Component: ComponentDocPage },
     { path: '/z-msg/:rest*', Component: MsgApp },
-    { path: '/z-msg/delivery', Component: DeliveryLogs },
 ]
 
 export { default as HomePage } from './pages/HomePage'

@@ -1,7 +1,7 @@
 import {useEffect, useState} from 'react'
 import {Alert, Card, Tag} from 'antd'
 import {msgApi} from '../services/api'
-import {ListTable, PageHeader} from '@yuku123/z-frontend-common/ui'
+import {ListTable} from '@yuku123/z-frontend-common/ui'
 
 const READ = {0: {text: '未读', color: 'blue'}, 1: {text: '已读', color: 'default'}}
 
@@ -57,8 +57,6 @@ export default function Inbox() {
 
     return (
         <div>
-            <PageHeader title="站内信"
-                        description="当前登录用户的收件箱（数据源 GET /api/msg/inbox/list，身份由服务端从 SSO 凭证解析）"/>
             {error ? (
                 <Card>
                     <Alert type="error" showIcon
