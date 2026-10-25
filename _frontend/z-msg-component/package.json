@@ -1,6 +1,6 @@
 {
   "name": "@yuku123/z-msg-component",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "z-msg 可复用前端组件：消息中心（模板/投递；lead 005 §9）",
   "type": "module",
   "main": "./dist/index.js",
