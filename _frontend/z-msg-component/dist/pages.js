@@ -5,17 +5,17 @@ import { useNavigate as _ } from "react-router-dom";
 import { useState as g, useEffect as E } from "react";
 const { Title: P, Paragraph: A } = O;
 function L() {
-  const i = _(), [t, s] = g(null);
+  const i = _(), [t, r] = g(null);
   E(() => {
-    const r = localStorage.getItem("userInfo");
-    if (r)
+    const s = localStorage.getItem("userInfo");
+    if (s)
       try {
-        s(JSON.parse(r));
+        r(JSON.parse(s));
       } catch {
-        s({ name: r });
+        r({ name: s });
       }
   }, []);
-  const n = U.filter((r) => r.key !== "/z-msg/home");
+  const n = U.filter((s) => s.key !== "/z-msg/home");
   return /* @__PURE__ */ e.jsxs("div", { children: [
     /* @__PURE__ */ e.jsx(a, { style: { marginBottom: 16, background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)", border: "none" }, children: /* @__PURE__ */ e.jsxs(c, { direction: "vertical", size: 4, style: { color: "#fff" }, children: [
       /* @__PURE__ */ e.jsxs(P, { level: 3, style: { color: "#fff", margin: 0 }, children: [
@@ -25,7 +25,7 @@ function L() {
       /* @__PURE__ */ e.jsx(A, { style: { color: "rgba(255,255,255,0.85)", margin: 0 }, children: "z-msg 消息中心 管理台" }),
       (t == null ? void 0 : t.role) && /* @__PURE__ */ e.jsx(T, { style: { marginTop: 8, background: "rgba(255,255,255,0.2)", color: "#fff", border: "none" }, children: t.role })
     ] }) }),
-    /* @__PURE__ */ e.jsx(w, { gutter: [16, 16], children: n.map((r) => /* @__PURE__ */ e.jsx(M, { xs: 24, sm: 12, md: 12, lg: 8, children: /* @__PURE__ */ e.jsx(a, { hoverable: !0, onClick: () => i(r.key), style: { borderTop: "3px solid #7c3aed" }, children: /* @__PURE__ */ e.jsxs(c, { align: "start", size: 12, children: [
+    /* @__PURE__ */ e.jsx(w, { gutter: [16, 16], children: n.map((s) => /* @__PURE__ */ e.jsx(M, { xs: 24, sm: 12, md: 12, lg: 8, children: /* @__PURE__ */ e.jsx(a, { hoverable: !0, onClick: () => i(s.key), style: { borderTop: "3px solid #7c3aed" }, children: /* @__PURE__ */ e.jsxs(c, { align: "start", size: 12, children: [
       /* @__PURE__ */ e.jsx("div", { style: {
         width: 44,
         height: 44,
@@ -37,12 +37,12 @@ function L() {
         alignItems: "center",
         justifyContent: "center",
         fontSize: 20
-      }, children: r.icon }),
+      }, children: s.icon }),
       /* @__PURE__ */ e.jsxs("div", { style: { minWidth: 0 }, children: [
-        /* @__PURE__ */ e.jsx("div", { style: { fontSize: 15, fontWeight: 600, color: "#0f172a" }, children: r.label }),
-        /* @__PURE__ */ e.jsx("div", { style: { fontSize: 12, color: "#94a3b8", marginTop: 2 }, children: r.key })
+        /* @__PURE__ */ e.jsx("div", { style: { fontSize: 15, fontWeight: 600, color: "#0f172a" }, children: s.label }),
+        s.desc && /* @__PURE__ */ e.jsx("div", { style: { fontSize: 12, color: "#94a3b8", marginTop: 2 }, children: s.desc })
       ] })
-    ] }) }) }, r.key)) })
+    ] }) }) }, s.key)) })
   ] });
 }
 function H({ mockAuth: i } = {}) {
@@ -50,7 +50,7 @@ function H({ mockAuth: i } = {}) {
     username: "",
     password: "",
     user: { name: "", role: "管理员" }
-  }, [s, n] = g(!1), r = async (d) => {
+  }, [r, n] = g(!1), s = async (d) => {
     n(!0);
     try {
       if (!t.username || !t.password) {
@@ -85,7 +85,7 @@ function H({ mockAuth: i } = {}) {
       }, children: "z" }),
       /* @__PURE__ */ e.jsx("div", { style: { fontSize: 18, fontWeight: 600, color: "#0f172a" }, children: "z-msg 管理台" })
     ] }),
-    /* @__PURE__ */ e.jsxs(o, { onFinish: r, size: "large", children: [
+    /* @__PURE__ */ e.jsxs(o, { onFinish: s, size: "large", children: [
       /* @__PURE__ */ e.jsx(o.Item, { name: "username", rules: [{ required: !0, message: "请输入用户名" }], children: /* @__PURE__ */ e.jsx(m, { prefix: /* @__PURE__ */ e.jsx(j, {}), placeholder: "用户名" }) }),
       /* @__PURE__ */ e.jsx(o.Item, { name: "password", rules: [{ required: !0, message: "请输入密码" }], children: /* @__PURE__ */ e.jsx(m.Password, { prefix: /* @__PURE__ */ e.jsx(b, {}), placeholder: "密码" }) }),
       /* @__PURE__ */ e.jsx(o.Item, { style: { marginBottom: 8 }, children: /* @__PURE__ */ e.jsx(
@@ -93,7 +93,7 @@ function H({ mockAuth: i } = {}) {
         {
           type: "primary",
           htmlType: "submit",
-          loading: s,
+          loading: r,
           block: !0,
           style: { background: "linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%)", border: "none" },
           children: "登 录"
