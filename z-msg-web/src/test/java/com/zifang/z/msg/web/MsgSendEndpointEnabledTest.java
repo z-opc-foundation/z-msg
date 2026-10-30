@@ -59,7 +59,7 @@ public class MsgSendEndpointEnabledTest {
 
     @Autowired
     private TestRestTemplate rest;
-    @javax.annotation.Resource(name = "dataSourceMsg")
+    @jakarta.annotation.Resource(name = "dataSourceMsg")
     private DataSource dataSourceMsg;
 
     // ---------------- 透传 + 真实发送 + 审计 ----------------

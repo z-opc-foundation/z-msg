@@ -60,7 +60,7 @@ public class MsgExampleApplicationTest {
     private TestRestTemplate rest;
     @LocalServerPort
     private int port;
-    @javax.annotation.Resource(name = "dataSourceMsg")
+    @jakarta.annotation.Resource(name = "dataSourceMsg")
     private DataSource dataSourceMsg;
 
     private final StandardWebSocketClient wsClient = new StandardWebSocketClient();

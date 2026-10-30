@@ -3,7 +3,7 @@ package com.zifang.z.msg.web.auth;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 缺省实现：只信一个由**可信入口**（网关 / nginx / 宿主自己的 filter）注入的请求头。

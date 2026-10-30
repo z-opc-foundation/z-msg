@@ -9,7 +9,7 @@ import com.zifang.z.msg.core.domain.entity.InAppMessage;
 import com.zifang.z.msg.core.domain.mapper.InAppMessageMapper;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 
 /**

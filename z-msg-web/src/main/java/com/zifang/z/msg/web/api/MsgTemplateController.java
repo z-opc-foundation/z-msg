@@ -6,7 +6,7 @@ import com.zifang.z.msg.core.domain.entity.MsgTemplateDO;
 import com.zifang.z.msg.core.domain.service.MsgTemplateService;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.Map;
 
 /**

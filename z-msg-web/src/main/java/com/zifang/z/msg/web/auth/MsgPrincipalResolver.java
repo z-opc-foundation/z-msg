@@ -1,6 +1,6 @@
 package com.zifang.z.msg.web.auth;
 
-import javax.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequest;
 
 /**
  * 谁是当前调用者。z-msg 不做登录，只留这个接缝给宿主接自己的认证体系（z-ctc 的 JWT 等）。

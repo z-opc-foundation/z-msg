@@ -8,8 +8,8 @@ import com.zifang.z.msg.core.realtime.RealtimeTicketService;
 import com.zifang.z.msg.web.auth.MsgPrincipalResolver;
 import org.springframework.web.bind.annotation.*;
 
-import javax.annotation.Resource;
-import javax.servlet.http.HttpServletRequest;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import java.util.HashMap;
 import java.util.Map;
 

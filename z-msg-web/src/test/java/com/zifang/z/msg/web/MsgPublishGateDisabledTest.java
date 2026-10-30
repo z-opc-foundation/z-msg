@@ -53,7 +53,7 @@ public class MsgPublishGateDisabledTest {
 
     @Autowired
     private TestRestTemplate rest;
-    @javax.annotation.Resource(name = "dataSourceMsg")
+    @jakarta.annotation.Resource(name = "dataSourceMsg")
     private DataSource dataSourceMsg;
 
     @Test

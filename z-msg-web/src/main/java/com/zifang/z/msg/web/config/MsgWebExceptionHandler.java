@@ -40,6 +40,17 @@ public class MsgWebExceptionHandler {
         return Result.<Void>fail(msg).code(400);
     }
 
+    /**
+     * SB3（Spring Framework 6.1+）对未映射路径默认抛 {@link NoResourceFoundException}
+     * （原来只是静默 404）。它必须保持 404 语义 —— 关掉的模块端点「必须真的不存在」
+     * （MsgWsDisabledTest/MsgSendEndpointDisabledTest 钉的就是这个），不能被兜底吃成 500。
+     */
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Result<Void> noResource(org.springframework.web.servlet.resource.NoResourceFoundException e) {
+        return Result.<Void>fail("路径不存在").code(404);
+    }
+
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<Void> unexpected(Exception e) {

@@ -3,8 +3,8 @@ package com.zifang.z.msg.example.demo;
 import com.zifang.z.msg.web.auth.MsgPrincipalResolver;
 import org.springframework.stereotype.Component;
 
-import javax.servlet.http.HttpServletRequest;
-import javax.servlet.http.HttpSession;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 
 /**
  * 演示身份接缝：从服务端 session 里取 userId。

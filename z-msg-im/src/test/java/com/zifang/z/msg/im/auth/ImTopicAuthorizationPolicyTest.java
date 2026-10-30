@@ -5,7 +5,7 @@ import com.zifang.z.msg.im.ImSpringTestSupport;
 import com.zifang.z.msg.im.domain.model.ImConvTypes;
 import org.junit.jupiter.api.Test;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;

@@ -98,4 +98,21 @@ import org.springframework.context.annotation.Configuration;
         sqlSessionFactoryRef = "sqlSessionFactoryMsg"
 )
 public class MsgImAutoConfiguration {
+
+    /**
+     * IM 侧恢复「Long 一律出字符串」（2026-10-30 SB3 火车）：z-boot-web-starter 的
+     * GlobalJacksonConfig 已改为阈值制（|v| ≤ 2^53-1 保持 number，雪花大数才转字符串），
+     * 这对小数值字段（latencyMs 等）是对的消费口径，但对 IM 不够 —— 雪花 id 之外，
+     * seq/total/userId 这类<b>小值 Long</b> 的语义也是「id」，必须恒为字符串，
+     * 否则前端 JSON.parse 后按 number 回传会在类型比较上出偏差。
+     * {@code serializerByType} 是 builder 级注册，配置顺序在 modulesToInstall 之后，
+     * 确定性压过地板的阈值 module，不依赖 bean 顺序。
+     */
+    @org.springframework.context.annotation.Bean
+    public org.springframework.boot.autoconfigure.jackson.Jackson2ObjectMapperBuilderCustomizer
+    imLongAsStringCustomizer() {
+        return builder -> builder
+                .serializerByType(Long.class, com.fasterxml.jackson.databind.ser.std.ToStringSerializer.instance)
+                .serializerByType(Long.TYPE, com.fasterxml.jackson.databind.ser.std.ToStringSerializer.instance);
+    }
 }

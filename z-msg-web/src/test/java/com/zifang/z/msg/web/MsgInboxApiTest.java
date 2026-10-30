@@ -73,7 +73,7 @@ public class MsgInboxApiTest {
     private MessageGateway gateway;
     @Autowired
     private RealtimeTicketService ticketService;
-    @javax.annotation.Resource(name = "dataSourceMsg")
+    @jakarta.annotation.Resource(name = "dataSourceMsg")
     private DataSource dataSourceMsg;
 
     /**

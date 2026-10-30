@@ -95,6 +95,7 @@ public class MsgAdminSurfaceCensusTest {
             "/api/msg/im/conversation/clear");
 
     @Autowired
+    @org.springframework.beans.factory.annotation.Qualifier("requestMappingHandlerMapping")
     private RequestMappingHandlerMapping handlerMapping;
 
     /**

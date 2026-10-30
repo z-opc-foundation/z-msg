@@ -13,7 +13,7 @@ import com.zifang.z.msg.im.domain.model.ImNotFoundException;
 import com.zifang.z.msg.im.domain.model.ImRoles;
 import org.junit.jupiter.api.Test;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;

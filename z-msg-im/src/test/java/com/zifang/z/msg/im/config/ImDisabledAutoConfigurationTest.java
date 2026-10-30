@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.TestPropertySource;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import javax.sql.DataSource;
 import java.util.ArrayList;
 import java.util.List;
@@ -66,7 +66,9 @@ public class ImDisabledAutoConfigurationTest {
 
     @Test
     public void turningTheModuleOffRegistersNoImBeansAtAll() {
-        assertNotNull(context.getBean(org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping.class),
+        // SB3 起 actuator 会多注册一个同型的 controllerEndpointHandlerMapping，按名字取主映射
+        assertNotNull(context.getBean("requestMappingHandlerMapping",
+                        org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping.class),
                 "前置：web 上下文本身是活的，否则下面的 0 没有意义");
         for (Class<?> type : new Class<?>[]{ImConversationService.class, ImMessageService.class,
                 ImReadService.class, ImConversationMapper.class, ImTopicAuthorizationPolicy.class,

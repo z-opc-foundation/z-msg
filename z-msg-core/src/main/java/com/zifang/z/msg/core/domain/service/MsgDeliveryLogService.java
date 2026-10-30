@@ -7,7 +7,7 @@ import com.zifang.z.msg.core.domain.entity.MsgDeliveryLogDO;
 import com.zifang.z.msg.core.domain.mapper.MsgDeliveryLogMapper;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 
 /**

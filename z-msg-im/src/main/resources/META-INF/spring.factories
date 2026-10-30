@@ -1,1 +1,0 @@
-org.springframework.boot.autoconfigure.EnableAutoConfiguration=com.zifang.z.msg.im.config.MsgImAutoConfiguration

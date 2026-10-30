@@ -69,7 +69,7 @@ abstract class WsHarness {
     protected WsProperties wsProperties;
     @Value("${local.server.port}")
     protected int port;
-    @javax.annotation.Resource(name = "dataSourceMsg")
+    @jakarta.annotation.Resource(name = "dataSourceMsg")
     protected DataSource dataSourceMsg;
 
     private final StandardWebSocketClient wsClient = new StandardWebSocketClient();

@@ -5,7 +5,7 @@ import com.zifang.z.msg.core.domain.entity.MsgUserPreferenceDO;
 import com.zifang.z.msg.core.domain.mapper.MsgUserPreferenceMapper;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashSet;

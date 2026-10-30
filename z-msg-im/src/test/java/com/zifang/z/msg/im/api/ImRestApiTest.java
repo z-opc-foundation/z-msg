@@ -5,7 +5,7 @@ import com.zifang.z.msg.im.domain.mapper.ImConversationMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.ResponseEntity;
 
-import javax.annotation.Resource;
+import jakarta.annotation.Resource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;

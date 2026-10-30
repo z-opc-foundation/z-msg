@@ -39,14 +39,55 @@ class ChannelsAutoConfigurationTest {
     private final ApplicationContextRunner runner = new ApplicationContextRunner()
             .withConfiguration(AutoConfigurations.of(MsgChannelsAutoConfiguration.class));
 
+    /**
+     * Boot 3 迁移（2026-10-30 SB3 火车）：注册入口从 {@code spring.factories} 的
+     * {@code EnableAutoConfiguration} 键迁到 {@code AutoConfiguration.imports} ——
+     * Boot 3 不再读 spring.factories 的该键，只读 imports 文件。
+     * <p>
+     * 这里必须断言新格式，否则等于「注册迁了但测试还盯着旧文件」⇒ 真的漏登记也照样绿。
+     * 旧口径参考 z-rpc 的 {@code AutoConfigurationMetadataTest}。
+     */
     @Test
-    void springFactoriesRegistersTheAutoConfiguration() throws Exception {
-        try (InputStream in = getClass().getResourceAsStream("/META-INF/spring.factories")) {
-            assertNotNull(in, "z-msg-channels 必须自带 spring.factories");
+    void autoConfigurationImportsRegistersTheAutoConfiguration() throws Exception {
+        try (InputStream in = getClass().getResourceAsStream(
+                "/META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports")) {
+            assertNotNull(in, "z-msg-channels 必须自带 AutoConfiguration.imports（Boot 3 的唯一注册入口）");
             String text = new Scanner(in, StandardCharsets.UTF_8.name()).useDelimiter("\\A").next();
             assertTrue(text.contains(MsgChannelsAutoConfiguration.class.getName()),
-                    "spring.factories 应注册 " + MsgChannelsAutoConfiguration.class.getName() + "，实际: " + text);
+                    "AutoConfiguration.imports 应注册 " + MsgChannelsAutoConfiguration.class.getName() + "，实际: " + text);
         }
+    }
+
+    /**
+     * 反向闸门：**本模块自己的** spring.factories 里不得再带 {@code EnableAutoConfiguration} 键。
+     * <p>
+     * 留着这行不会报错，但会让「imports 漏登记」变成静默失效 ——
+     * Boot 3 根本不看这个键，于是本模块在下游**完全不装配**，而启动日志一片安静。
+     * <p>
+     * ⚠ 只能用「本模块 classloader 的资源 URL」读，不能用
+     * {@code getResourceAsStream("/META-INF/spring.factories")} ——
+     * 那会**全 classpath 搜第一个命中**，命中的是第三方 jar。
+     * 实测踩过：mybatis-plus-spring-boot-autoconfigure 3.5.7 自带 spring.factories
+     * 且仍带 EnableAutoConfiguration 键（它自己还没迁 Boot 3），
+     * 用全局读法会把**第三方**的旧格式误判成本模块的 ⇒ 平白判红。
+     */
+    @Test
+    void ownSpringFactoriesDoesNotCarryEnableAutoConfigurationKey() throws Exception {
+        java.net.URL url = getClass().getClassLoader()
+                .getResource("META-INF/spring.factories");
+        if (url == null) {
+            return; // 本模块没有这个文件 = 最好：注册已全量迁到 imports
+        }
+        // 只接受来自本模块 classes 目录的那一份；依赖 jar 的同名文件一律跳过
+        if (!url.toString().contains("/z-msg-channels/")) {
+            return;
+        }
+        String text;
+        try (InputStream in = url.openStream()) {
+            text = new Scanner(in, StandardCharsets.UTF_8.name()).useDelimiter("\\A").next();
+        }
+        assertFalse(text.contains("org.springframework.boot.autoconfigure.EnableAutoConfiguration"),
+                "本模块 spring.factories 里不应再有 EnableAutoConfiguration 键（Boot 3 不认），实际: " + text);
     }
 
     @Test
