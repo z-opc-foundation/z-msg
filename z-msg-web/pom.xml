@@ -13,11 +13,12 @@
 
     <artifactId>z-msg-web</artifactId>
     <packaging>jar</packaging>
-    <name>z-msg-web (Spring Boot REST Controllers + AutoConfiguration)</name>
+    <name>z-msg :: web</name>
     <description>
         Z-MSG Web 层: Spring Boot 自动配置（spring.factories 注册 MsgAutoConfiguration）
         + REST 端点（Message / MsgTemplate / MsgBatch / MsgDeliveryLog / MsgPreference）。
         业务模块 import 本模块即可开启消息下发 HTTP API。
+        Spring Boot REST Controllers + AutoConfiguration
     </description>
 
     <url>https://github.com/z-opc-foundation/z-msg/tree/main/z-msg-web</url>

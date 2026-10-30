@@ -13,12 +13,13 @@
 
     <artifactId>z-msg-ws</artifactId>
     <packaging>jar</packaging>
-    <name>z-msg-ws (WebSocket realtime access)</name>
+    <name>z-msg :: ws</name>
     <description>
         Z-MSG 实时接入层: 一条 WebSocket 端点 + 一次性 ticket 握手鉴权 + topic 订阅模型。
         实现 z-msg-api 的 RealtimeTransport，被 z-msg-core 的 RealtimePublisher 自动收集，
         业务侧除配置 ticket 密钥外零改动；站内信/IM/业务事件共用一条连接。
         跨节点广播或 SSE 兜底请另写一个 RealtimeTransport 实现，本模块不冒充这些能力。
+        WebSocket realtime access
     </description>
 
     <url>https://github.com/z-opc-foundation/z-msg/tree/main/z-msg-ws</url>

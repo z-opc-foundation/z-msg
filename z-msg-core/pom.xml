@@ -13,12 +13,13 @@
 
     <artifactId>z-msg-core</artifactId>
     <packaging>jar</packaging>
-    <name>z-msg-core (Default Message Providers + Router + RateLimiter + 7 DO entities)</name>
+    <name>z-msg :: core</name>
     <description>
         Z-MSG Core 层: 默认 Provider 实现（Mock/Smtp Email + Mock Sms）+ ChannelRouter + RateLimiter
         + MessageTemplateEngine + 7 DO 实体（MsgTemplate / MsgTemplateVersion / MsgTemplateI18n /
         MsgBatchTask / MsgDeliveryLog / MsgUserPreference / InAppMessage）。
         生产可替换为 Aliyun SMS / Tencent Cloud SMS 等真实 Provider。
+        Default Message Providers + Router + RateLimiter + 7 DO entities
     </description>
 
     <url>https://github.com/z-opc-foundation/z-msg/tree/main/z-msg-core</url>

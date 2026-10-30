@@ -13,12 +13,13 @@
 
     <artifactId>z-msg-im</artifactId>
     <packaging>jar</packaging>
-    <name>z-msg-im (Conversation / chat-room domain on top of z-msg realtime)</name>
+    <name>z-msg :: im</name>
     <description>
         Z-MSG IM 层: 会话（单聊/群聊/聊天室）、成员、按会话单调递增的 seq、离线增量同步、
         已读回执、typing/presence、以及"三行代码开一个聊天室"的门面 API。
         实时下发只依赖 z-msg-api 的 RealtimePublisher 接缝（宿主带不带 z-msg-ws 都能编译），
         落库复用 z-msg-core 的数据源与 MyBatis-Plus 约定。
+        Conversation / chat-room domain on top of z-msg realtime
     </description>
 
     <url>https://github.com/z-opc-foundation/z-msg/tree/main/z-msg-im</url>
