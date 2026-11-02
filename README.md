@@ -23,7 +23,7 @@
 |------|-----|
 | **仓库** | `z-msg` |
 | **Maven 坐标** | `io.github.yuku123:z-msg:${revision}`（聚合 POM） |
-| **当前版本** | `1.2.4`（根 POM `<revision>`，CI-friendly versions + flatten-maven-plugin） |
+| **当前版本** | `1.2.5`（根 POM `<revision>`，CI-friendly versions + flatten-maven-plugin） |
 | **父项目** | `io.github.yuku123:z-boot-parent:1.2.0`（`<relativePath/>` 留空，parent 在 repo1 不在磁盘；**发布件经 flatten `oss` 模式剥掉 parent，消费者拿到的是自包含 raw pom**） |
 | **Maven Central** | 已发布：`z-msg`(parent) / `z-msg-api` / `z-msg-core` / `z-msg-web` / `z-msg-ws` / `z-msg-im` / `z-msg-channels` 的 **1.2.0 / 1.2.1 / 1.2.2** 均可从 repo1 拉取；`z-msg-example` 各版均 404（见下「发布状态」） |
 | **默认端口** | 库本身无固定端口；演示宿主 `z-msg-example` 监听 `18099`；WS 端点路径 `/api/msg/ws` |

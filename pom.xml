@@ -88,7 +88,7 @@
 
     <properties>
         <!-- CI-friendly 版本根 (发版改这一处即可) -->
-        <revision>1.2.4</revision>
+        <revision>1.2.5</revision>
 
         <!-- 版本口径全部由 parent 下发。2026-09-29 迁移删掉的键逐条按**坐标**对过
              （parent_preflight.py 对 z-msg 报的第 2/5 节）：
@@ -398,7 +398,11 @@
                             <skip>${central.gpg.skip}</skip>
                             <!-- 显式钉签名密钥：不钉时 gpg 靠默认选择，换机器/换 GNUPGHOME
                                  就可能签出不被 Central 认的 key（z-kb 仓同口径） -->
-                            <keyname>E3DCF6F856759D910C084A5FA403FCCFD7EF5DA6</keyname>
+                            <!-- 2026-11-03：旧 RSA key E3DCF6F856759D910C084A5FA403FCCFD7EF5DA6
+                                 的**私钥已不在本机**（各仓 .gnupg 里只剩 ed25519）⇒ 1.2.5 起
+                                 改用新生成的 ed25519 key，公钥已上传 keys.openpgp.org
+                                 （Central Portal 从该 keyserver 拉公钥校验签名）。 -->
+                            <keyname>D307A79EFCE36C7D5B14717A0D8BC938D935EF25</keyname>
                             <gpgArguments>
                                 <arg>--pinentry-mode</arg>
                                 <arg>loopback</arg>
