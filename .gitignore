@@ -81,3 +81,8 @@ dist.stale-*/
 **/dist.stale-*/
 dist.bak-*/
 **/dist.bak-*/
+
+# 前端组件库 dist/：vite build 产物（public/ 才是源文件）。
+# npm publish 前必须先 npm run build，否则发出去是空包。
+_frontend/**/dist/
+dist/
