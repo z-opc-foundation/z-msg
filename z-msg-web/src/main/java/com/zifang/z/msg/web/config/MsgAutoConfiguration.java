@@ -8,6 +8,8 @@ import com.zifang.z.boot.datasource.starter.ModuleDataSourceTemplate;
 import com.zifang.z.msg.core.bus.DefaultMessageBus;
 import com.zifang.z.msg.core.channel.InAppChannel;
 import com.zifang.z.msg.core.config.MessageProperties;
+import com.zifang.z.msg.core.domain.service.MsgClientService;
+import com.zifang.z.msg.web.auth.MsgClientAuthInterceptor;
 import com.zifang.z.msg.web.auth.MsgPrincipalResolver;
 import com.zifang.z.msg.web.auth.TrustedHeaderPrincipalResolver;
 import org.apache.ibatis.session.SqlSessionFactory;
@@ -138,6 +140,21 @@ public class MsgAutoConfiguration extends ModuleDataSourceTemplate {
             @Override
             public void addInterceptors(InterceptorRegistry registry) {
                 registry.addInterceptor(adminEndpointGate).addPathPatterns("/**");
+            }
+        };
+    }
+
+    /**
+     * 客户端 AK 拦截器：只在「带了 X-Api-Key」时才判，不带就放行给端点自己的准入
+     * （页面上给人发消息走平台用户身份，不是 AK）。
+     */
+    @Bean
+    public WebMvcConfigurer msgClientAuthConfigurer(MsgClientService clientService) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(new MsgClientAuthInterceptor(clientService))
+                        .addPathPatterns("/api/msg/send", "/api/msg/publish", "/api/msg/batch/submit");
             }
         };
     }

@@ -31,7 +31,7 @@ public class AdminEndpointGate implements HandlerInterceptor {
     /** 管理面前缀。加新的一组就往这里加。 */
     public static final Set<String> ADMIN_PREFIXES =
             Collections.unmodifiableSet(new LinkedHashSet<String>(Arrays.asList(
-                    "/api/msg/template", "/api/msg/batch", "/api/msg/delivery")));
+                    "/api/msg/template", "/api/msg/batch", "/api/msg/delivery", "/api/msg/client")));
 
     private static final UrlPathHelper PATH_HELPER = new UrlPathHelper();
 

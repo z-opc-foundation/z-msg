@@ -153,3 +153,26 @@ CREATE TABLE IF NOT EXISTS z_msg_user_preference (
     PRIMARY KEY (id),
     UNIQUE KEY uk_pref_user_biz (user_id, biz_type, tenant_code)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='用户接收偏好与静默时段';
+
+-- ============ 客户端凭据（对外调用方 AK） ============
+-- key_hash 存 sha-256 摘要、key_prefix 只留末 8 位：明文 AK 只在创建时返回一次，库里拿不回来。
+CREATE TABLE IF NOT EXISTS z_msg_client (
+    id               BIGINT      NOT NULL AUTO_INCREMENT,
+    app_code         VARCHAR(64) NOT NULL COMMENT '调用方应用编码',
+    app_name         VARCHAR(128)         DEFAULT NULL COMMENT '调用方应用名（展示用）',
+    key_hash         VARCHAR(64) NOT NULL COMMENT 'AK 的 sha-256 十六进制摘要',
+    key_prefix       VARCHAR(16)          DEFAULT NULL COMMENT 'AK 末 8 位，仅供列表辨认',
+    status           INT          NOT NULL DEFAULT 1 COMMENT '1=启用 0=停用',
+    expire_time      DATETIME             DEFAULT NULL COMMENT '过期时间；NULL=永不过期',
+    daily_quota      INT          NOT NULL DEFAULT 0 COMMENT '每日配额条数；0=不限',
+    quota_date       VARCHAR(10)          DEFAULT NULL COMMENT '配额计数所属日期 yyyy-MM-dd',
+    quota_used       INT          NOT NULL DEFAULT 0 COMMENT '当日已用量',
+    allowed_channels VARCHAR(255)         DEFAULT NULL COMMENT '允许通道，逗号分隔；空=全部',
+    ip_whitelist     VARCHAR(255)         DEFAULT NULL COMMENT 'IP 白名单，逗号分隔；空=不限',
+    description      VARCHAR(255)         DEFAULT NULL,
+    created_time     DATETIME    NOT NULL,
+    updated_time     DATETIME    NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_msg_client_hash (key_hash),
+    KEY idx_msg_client_app (app_code)
+) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COMMENT ='对外调用方凭据（app + AK）';

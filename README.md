@@ -551,15 +551,23 @@ FanOutResult r = gateway.fanOut("ORDER_SHIPPED", Long.valueOf(userId), receivers
 | GET | `/api/msg/channel/list` | ❌ 无需身份；实测不回传任何密钥 |
 | GET | `/api/msg/channel/detail?channel=` | ❌ |
 | POST | `/api/msg/publish?eventType=&userId=` | ❌ **默认关**（`z-msg.web.publish-endpoint-enabled=false`）。关着时实测 HTTP 200 + 业务 `code:403`，不是 HTTP 403 |
-| POST | `/api/msg/send` | ❌ **默认关**（`z-msg.web.send-endpoint-enabled=false`）。关着时实测**真 HTTP 403** + 业务 `code:403`；开着时真投递并返回 `msgId` |
+| POST | `/api/msg/send` | ✅ **要身份**（2026-11-13 起）：AK 客户端（`X-Api-Key`）或平台用户身份（宿主注入的 `MsgPrincipalResolver`）。两者都没有 ⇒ **真 HTTP 401**；老开关 `z-msg.web.send-endpoint-enabled=true` 仍认（会把裸调用也放行，向后兼容），缺省关 |
 | POST | `/api/msg/template/list` · `/api/msg/template`（建）· `/{id}`（GET/PUT/DELETE）· `/{id}/approve` · `/{id}/reject` · `/cache/refresh` | ❌ **默认关**：8 个映射一律真 HTTP 403 |
 | POST | `/api/msg/batch/submit` · `/list` · `/{id}/cancel`，GET `/api/msg/batch/{id}` | ❌ 同上 |
 | POST | `/api/msg/delivery/list` | ❌ 同上 |
+| POST | `/api/msg/client/list` · `/create` · `/update` · `/rotate` · `/toggle` · `/delete` | ❌ **默认关**（管理面闸门）：6 条路径一律真 HTTP 403。`create`/`rotate` 返回的 `plainKey` 是 AK 明文，**只此一次可见**（库里只留 sha-256 摘要与末 8 位前缀） |
 | GET **和** POST | `/api/msg/delivery/stats` | ❌ 同上。GET 由 `MessageController` 声明、POST 由 `MsgDeliveryLogController` 声明；闸门按**路径**判，不会因为"不长在它自己的 controller 里"而漏出去 |
 
-`/api/msg/send` 是后加的**直发端点**（指定渠道 + 指定收件人 + 运行时全文），门禁与 publish 同款
-（显式开关、默认关），但关着时回**真 HTTP 403**（publish 那套 HTTP 200 + 业务码是历史包袱，
-它自己保持不变，回归钉在 `MsgPublishGateDisabledTest` / `MsgPublishGateEnabledTest`）。
+`/api/msg/send` 是后加的**直发端点**（指定渠道 + 指定收件人 + 运行时全文）。它的准入口径
+2026-11-13 改过一次：从「显式开关、默认关」改成「**要身份**」——
+① AK 客户端：请求头 `X-Api-Key`，服务端按 sha-256 摘要比对（库里不存明文，明文只在
+`/api/msg/client/create` 那一次返回）；② 平台用户身份：宿主注入的 `MsgPrincipalResolver`
+（页面上给人发消息走这条）。两者都没有 ⇒ **真 HTTP 401**。老开关
+`z-msg.web.send-endpoint-enabled=true` 仍然认，它会把裸调用也放行（向后兼容），缺省关。
+publish 那套 HTTP 200 + 业务码是历史包袱，它自己保持不变，回归钉在
+`MsgPublishGateDisabledTest` / `MsgPublishGateEnabledTest`；send 这边的准入回归钉在
+`MsgSendEndpointDisabledTest`（无身份 401）与 `MsgSendEndpointAkTest`（AK 有效/停用/过期/
+通道白名单/配额五条线）。
 管理面那 12 条路径不是手抄的：`MsgAdminSurfaceCensusTest` 在示例宿主（web + im 全量装配）
 里把活的 handler mapping 逐条过一遍闸门判定，与两份钉死的清单对账——少拦一条或多放一条，测试就红。
 
@@ -690,7 +698,7 @@ MySQL 与 H2 各一份，同源由 `SchemaParityTest` 真跑执行验证：
 
 | 脚本 | 内容 |
 |---|---|
-| `z-msg/sql/schema-mysql.sql` / `schema-h2.sql`（在 `z-msg-core` 的 jar 里） | 7 张表：`z_msg_message`、`z_msg_template`、`z_msg_template_i18n`、`z_msg_template_version`、`z_msg_delivery_log`、`z_msg_batch_task`、`z_msg_user_preference`。`z_msg_delivery_log` 上有唯一键 `uk_channel_biz_dedup`（跨节点出站幂等的仲裁点）；**存量库要走 `upgrade-delivery-log-idemotency.sql` 手工升级** |
+| `z-msg/sql/schema-mysql.sql` / `schema-h2.sql`（在 `z-msg-core` 的 jar 里） | 8 张表：`z_msg_message`、`z_msg_template`、`z_msg_template_i18n`、`z_msg_template_version`、`z_msg_delivery_log`、`z_msg_batch_task`、`z_msg_user_preference`、`z_msg_client`（对外调用方的 app + AK 凭据：`key_hash` 存 sha-256 摘要、`key_prefix` 存末 8 位，**库里没有 AK 明文**）。`z_msg_delivery_log` 上有唯一键 `uk_channel_biz_dedup`（跨节点出站幂等的仲裁点）；**存量库要走 `upgrade-delivery-log-idemotency.sql` 手工升级** |
 | `z-msg/sql/upgrade-delivery-log-idemotency.sql`（在 `z-msg-core` 的 jar 里） | 存量库的增量升级：给 `z_msg_delivery_log` 加 `idempotency_key` 列 + 建 `uk_channel_biz_dedup`。含预检 SQL（存量重复令牌会挡住建索引）与回滚语句 |
 | `z-msg/sql/im-schema-mysql.sql` / `im-schema-h2.sql`（在 `z-msg-im` 的 jar 里） | 4 张表：会话、成员、消息、已读回执；唯一键 `uk_im_conv_pair`、`uk_im_member_conv_user`、`uk_im_msg_conv_seq`、`uk_im_msg_conv_client`、`uk_im_receipt_conv_user` |
 

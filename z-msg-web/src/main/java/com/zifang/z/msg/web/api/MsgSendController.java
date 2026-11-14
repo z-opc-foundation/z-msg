@@ -5,7 +5,12 @@ import com.zifang.z.msg.api.Channels;
 import com.zifang.z.msg.api.Message;
 import com.zifang.z.msg.api.MessageGateway;
 import com.zifang.z.msg.api.MessageSendResult;
+import com.zifang.z.msg.core.domain.entity.MsgClientDO;
+import com.zifang.z.msg.core.domain.service.MsgClientService;
+import com.zifang.z.msg.web.auth.MsgClientAuthInterceptor;
+import com.zifang.z.msg.web.auth.MsgPrincipalResolver;
 import com.zifang.z.msg.web.config.MsgWebProperties;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -58,6 +63,15 @@ public class MsgSendController {
             "send 端点未启用：确认调用方已在认证边界内后设置 z-msg.web.send-endpoint-enabled=true";
 
     /**
+     * 401 正文。准入口径已从「开关」改成「身份」：
+     * AK 客户端（{@code X-Api-Key}）或平台用户身份（宿主注入的 {@code MsgPrincipalResolver}）
+     * 都能发；两者都没有才 401。老开关 {@code send-endpoint-enabled=true} 仍然认，
+     * 它会把裸调用也放行（向后兼容），但默认是关的。
+     */
+    public static final String UNAUTHORIZED_MESSAGE =
+            "未识别调用者身份：带 X-Api-Key（客户端 AK）或平台登录态才能发消息";
+
+    /**
      * {@code bizType} 为空时的归档值。
      * <p>
      * 为什么给默认值而不是报错：站内信落库那一列（{@code event_type}）是 NOT NULL，
@@ -71,19 +85,30 @@ public class MsgSendController {
     private MessageGateway messageGateway;
     @Resource
     private MsgWebProperties webProperties;
+    @Resource
+    private MsgPrincipalResolver principalResolver;
+    @Resource
+    private MsgClientService clientService;
 
     /**
      * 直发一条消息。
      *
      * @param req 请求体（{@code Message} 的直填子集），可空
+     * @param request 当前请求，用于解析调用者身份
      * @return 成功时 {@code data} 里带 {@code msgId}；失败时是带人话的 4xx/5xx
      */
     @PostMapping("/send")
-    public ResponseEntity<Result<Map<String, Object>>> send(@RequestBody(required = false) MsgSendRequest req) {
-        // 1. 门禁先行：端点关着的时候，body 什么样都不看
-        if (!webProperties.isSendEndpointEnabled()) {
-            return ResponseEntity.status(HttpStatus.FORBIDDEN)
-                    .body(Result.<Map<String, Object>>fail(DISABLED_MESSAGE).code(403));
+    public ResponseEntity<Result<Map<String, Object>>> send(@RequestBody(required = false) MsgSendRequest req,
+                                                             HttpServletRequest request) {
+        // 1. 准入：AK 客户端 或 平台用户身份 或 老开关（向后兼容）
+        MsgClientDO client = MsgClientAuthInterceptor.clientOf(request);
+        Long principalUserId = null;
+        if (client == null) {
+            principalUserId = principalResolver.resolve(request);
+            if (principalUserId == null && !webProperties.isSendEndpointEnabled()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(Result.<Map<String, Object>>fail(UNAUTHORIZED_MESSAGE).code(401));
+            }
         }
 
         // 2. 校验（非法入参统一走 MsgWebExceptionHandler ⇒ HTTP 400 + 人话）
@@ -101,6 +126,12 @@ public class MsgSendController {
         }
         if (isBlank(req.getContent())) {
             throw new IllegalArgumentException("content 不能为空");
+        }
+        // AK 客户端的通道白名单（页面那种平台用户身份没有这个约束）
+        if (client != null && !clientService.verifyChannel(client, channel)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Result.<Map<String, Object>>fail(
+                            "客户端 " + client.getAppCode() + " 无权使用通道 " + channel).code(403));
         }
 
         // 3. 一行透传：请求体直填成 Message，其余交给 MessageGateway 既有管道

@@ -3,6 +3,7 @@ package com.zifang.z.msg.core.schema;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.zifang.z.msg.core.domain.entity.InAppMessage;
 import com.zifang.z.msg.core.domain.entity.MsgBatchTaskDO;
+import com.zifang.z.msg.core.domain.entity.MsgClientDO;
 import com.zifang.z.msg.core.domain.entity.MsgDeliveryLogDO;
 import com.zifang.z.msg.core.domain.entity.MsgTemplateDO;
 import com.zifang.z.msg.core.domain.entity.MsgTemplateI18nDO;
@@ -57,7 +58,8 @@ public class SchemaParityTest {
             MsgTemplateVersionDO.class,
             MsgDeliveryLogDO.class,
             MsgBatchTaskDO.class,
-            MsgUserPreferenceDO.class);
+            MsgUserPreferenceDO.class,
+            MsgClientDO.class);
 
     private static final Pattern TABLE_START =
             Pattern.compile("^CREATE\\s+TABLE\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(\\w+)\\s*\\($", Pattern.CASE_INSENSITIVE);

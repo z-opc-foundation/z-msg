@@ -5,11 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
-import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.ResponseEntity;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.test.context.TestPropertySource;
 
 import javax.sql.DataSource;
@@ -21,18 +17,22 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@code POST /api/msg/send} 的<b>开关关</b>这一侧（TASK-20261012-019）。
+ * {@code POST /api/msg/send} 的<b>无身份</b>这一侧。
  * <p>
- * 这个端点能往<b>任意</b>收件人发消息 —— 和 publish 一样，是个未认证的投递入口。
- * 所以默认必须关，关着的时候必须回<b>真 HTTP 403</b>（不是 404、不是 200 + 业务码）。
+ * 这个端点能往<b>任意</b>收件人发消息 —— 未认证的投递入口不能开。
+ * <p>
+ * 准入口径（2026-11-13 起）：<b>AK 客户端</b>（{@code X-Api-Key}）或<b>平台用户身份</b>
+ * （宿主注入的 {@code MsgPrincipalResolver}）都能发；两者都没有 ⇒ HTTP 401。
+ * 老开关 {@code z-msg.web.send-endpoint-enabled=true} 仍然认，它会把裸调用也放行
+ * （向后兼容），但缺省是关的。
  * <p>
  * 用例钉四件事：
  * <ol>
- *   <li>HTTP 状态码是 403（不是 404 —— 404 会让调用方以为端点不存在从而另寻他路，
+ *   <li>HTTP 状态码是 401（不是 404 —— 404 会让调用方以为端点不存在从而另寻他路，
  *       200 + 业务码更糟：绝大多数 HTTP 客户端只看状态码）；</li>
- *   <li>正文业务码也是 403，且说明了怎么打开它；</li>
+ *   <li>正文业务码也是 401，且说明了两条准入方式（AK / 平台登录态）；</li>
  *   <li><b>一条消息都没发出去</b>（闸门形同虚设的防线）；</li>
- *   <li>缺省配置下开关就是关的（不设任何属性也必须是 403 —— 属性绑定写错的话这里会红）。</li>
+ *   <li>缺省配置下不设任何属性也必须是 401 —— 属性绑定写错的话这里会红。</li>
  * </ol>
  */
 @SpringBootTest(classes = MsgWebTestApplication.class,
@@ -40,7 +40,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @TestPropertySource(properties = {
         "spring.autoconfigure.exclude=com.zifang.ctc.sso.config.SsoAutoConfiguration,com.zifang.ctc.web.config.ZCompanyCtcWebAutoConfiguration",
         "z-msg.enabled=true",
-        // 故意**不**设 z-msg.web.send-endpoint-enabled：这一侧验的就是「缺省 = 关」。
+        // 故意**不**设 z-msg.web.send-endpoint-enabled：这一侧验的就是「缺省 = 不放行」。
         "z.msg.test.db=msg_send_off_it"
 })
 public class MsgSendEndpointDisabledTest {
@@ -49,65 +49,63 @@ public class MsgSendEndpointDisabledTest {
     private static final long PROBE_USER = 9201L;
     private static final String PROBE_BIZ = "MSG019-SEND-OFF";
 
-    @Autowired
-    private TestRestTemplate rest;
+    @LocalServerPort
+    private int port;
     @jakarta.annotation.Resource(name = "dataSourceMsg")
     private DataSource dataSourceMsg;
 
     @Test
-    public void sendWithGateOffAnswers403AndDeliversNothing() throws Exception {
+    public void sendWithoutIdentityAnswers401AndDeliversNothing() throws Exception {
         String body = "{\"channel\":\"IN_APP\",\"userId\":" + PROBE_USER + ","
                 + "\"subject\":\"闸门关着\",\"content\":\"这条不该发出去\","
                 + "\"bizType\":\"" + PROBE_BIZ + "\"}";
-        ResponseEntity<String> resp = exchange(body);
+        MsgSendHttp.Reply resp = exchange(body);
 
-        System.out.println("===== PROBE send/gate-off =====");
+        System.out.println("===== PROBE send/no-identity =====");
         System.out.println("REQUEST        : POST /api/msg/send");
         System.out.println("REQUEST-BODY   : " + body);
-        System.out.println("RESPONSE-STATUS: " + resp.getStatusCodeValue() + " " + resp.getStatusCode());
-        System.out.println("RESPONSE-BODY  : " + resp.getBody());
+        System.out.println("RESPONSE-STATUS: " + resp.status + " " + resp.status);
+        System.out.println("RESPONSE-BODY  : " + resp.body);
 
-        assertEquals(403, resp.getStatusCodeValue(),
-                "开关关着必须是**真 HTTP 403**（不是 404、不是 200 + 业务码），实际 "
-                        + resp.getStatusCode() + " body=" + resp.getBody());
-        JsonNode json = JSON.readTree(resp.getBody());
-        assertEquals(403, json.path("code").asInt(),
-                "正文业务码也必须是 403，实际 body=" + resp.getBody());
-        assertTrue(json.path("message").asText().contains("send-endpoint-enabled"),
-                "403 的说明里必须点名怎么打开它（z-msg.web.send-endpoint-enabled），实际 body=" + resp.getBody());
+        assertEquals(401, resp.status,
+                "没有 AK 也没有平台身份必须是**真 HTTP 401**（不是 404、不是 200 + 业务码），实际 "
+                        + resp.status + " body=" + resp.body);
+        JsonNode json = JSON.readTree(resp.body);
+        assertEquals(401, json.path("code").asInt(),
+                "正文业务码也必须是 401，实际 body=" + resp.body);
+        String msg = json.path("message").asText();
+        assertTrue(msg.contains("X-Api-Key") && msg.contains("登录态"),
+                "401 的说明里必须点名两条准入方式（X-Api-Key / 平台登录态），实际 body=" + resp.body);
         assertEquals(0, countMessages(PROBE_BIZ, PROBE_USER),
-                "闸门关着时一条都不该发出去：真发出去的话这个闸门等于没关");
+                "没身份时一条都不该发出去：真发出去的话这个闸门等于没关");
 
         System.out.println("ROWS z_msg_message(bizType=" + PROBE_BIZ + ", userId=" + PROBE_USER + "): "
                 + countMessages(PROBE_BIZ, PROBE_USER));
-        System.out.println("===== END PROBE send/gate-off =====");
+        System.out.println("===== END PROBE send/no-identity =====");
     }
 
     /**
-     * 闸门关着时，<b>不合法的 body 也只回 403</b>：端点关着的时候，
+     * 没身份时，<b>不合法的 body 也只回 401</b>：不准入的时候，
      * 连"你的 body 合不合法"都不该告诉外人。
      */
     @Test
-    public void sendWithGateOffDoesNotLeakValidationDetail() throws Exception {
-        ResponseEntity<String> resp = exchange("{\"channel\":\"NOT_A_CHANNEL\",\"content\":\"\"}");
+    public void sendWithoutIdentityDoesNotLeakValidationDetail() throws Exception {
+        MsgSendHttp.Reply resp = exchange("{\"channel\":\"NOT_A_CHANNEL\",\"content\":\"\"}");
 
-        System.out.println("===== PROBE send/gate-off + 非法 body =====");
+        System.out.println("===== PROBE send/no-identity + 非法 body =====");
         System.out.println("REQUEST        : POST /api/msg/send");
         System.out.println("REQUEST-BODY   : {\"channel\":\"NOT_A_CHANNEL\",\"content\":\"\"}");
-        System.out.println("RESPONSE-STATUS: " + resp.getStatusCodeValue() + " " + resp.getStatusCode());
-        System.out.println("RESPONSE-BODY  : " + resp.getBody());
+        System.out.println("RESPONSE-STATUS: " + resp.status + " " + resp.status);
+        System.out.println("RESPONSE-BODY  : " + resp.body);
 
-        assertEquals(403, resp.getStatusCodeValue(),
-                "闸门关着时非法 body 也必须是 403（不能因为 body 不合法就回 400 把端点形状漏出去），实际 "
-                        + resp.getStatusCode() + " body=" + resp.getBody());
-        System.out.println("===== END PROBE send/gate-off + 非法 body =====");
+        assertEquals(401, resp.status,
+                "没身份时非法 body 也必须是 401（不能因为 body 不合法就回 400 把端点形状漏出去），实际 "
+                        + resp.status + " body=" + resp.body);
+        System.out.println("===== END PROBE send/no-identity + 非法 body =====");
     }
 
-    private ResponseEntity<String> exchange(String body) {
-        HttpHeaders headers = new HttpHeaders();
-        headers.set("Content-Type", "application/json");
-        return rest.exchange("/api/msg/send", HttpMethod.POST,
-                new HttpEntity<String>(body, headers), String.class);
+    private MsgSendHttp.Reply exchange(String body) throws Exception {
+        return MsgSendHttp.post(port, "/api/msg/send", body, null);
     }
 
     private int countMessages(String bizType, long userId) {
