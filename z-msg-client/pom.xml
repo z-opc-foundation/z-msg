@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>io.github.yuku123</groupId>
+        <artifactId>z-msg</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>z-msg-client</artifactId>
+    <packaging>jar</packaging>
+
+    <name>z-msg :: client</name>
+    <description>
+        z-msg 消息中心 HTTP SDK。给**不再内嵌 z-msg-web 的进程**用（别的板块 / 脚本 / 外部系统）：
+        直发消息（任意通道 + 任意收件人）、批量下发、事件发布、通道清单。
+        形态照 z-ctc-client / z-config-client：接口 + Remote 实现 + 静态 Factory，
+        HttpURLConnection，零框架依赖，不依赖 Spring。
+        两种身份：AK 客户端（请求头 X-Api-Key，建 client 时给）或平台 token（方法参数给）。
+    </description>
+
+    <dependencies>
+        <!-- JSON。不引本仓的 z-msg-core：DTO 一律在本模块自定义（model 包），
+             不把持久化实体泄漏给消费方。 -->
+        <dependency>
+            <groupId>io.github.yuku123</groupId>
+            <artifactId>z-util-parser-json</artifactId>
+        </dependency>
+
+        <!-- ============ test ============ -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>ch.qos.logback</groupId>
+                    <artifactId>logback-classic</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>17</source>
+                    <target>17</target>
+                    <proc>none</proc>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

@@ -78,6 +78,7 @@
 
     <modules>
         <module>z-msg-api</module>
+        <module>z-msg-client</module>
         <module>z-msg-core</module>
         <module>z-msg-channels</module>
         <module>z-msg-ws</module>
@@ -162,6 +163,11 @@
             <dependency>
                 <groupId>io.github.yuku123</groupId>
                 <artifactId>z-msg-api</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-msg-client</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>
