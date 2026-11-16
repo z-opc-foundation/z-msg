@@ -29,6 +29,18 @@ public interface ZMsgClient {
     Map<String, Object> send(ZMsgSendRequest request, String token);
 
     /**
+     * 直发一条消息，<b>请求体原样透传</b>（键名不重写）。
+     * <p>
+     * 给「字段由调用方自己拼」的场景用（脚本里的 {@code msg.send([...]}）。
+     * 键名按平台口径用 snake_case（{@code user_id} / {@code biz_type} …）；
+     * 服务端 DTO 同时接受 camelCase。
+     *
+     * @param body  请求体
+     * @param token 平台 token；用 AK 身份时传 null
+     */
+    Map<String, Object> sendRaw(Map<String, Object> body, String token);
+
+    /**
      * 批量下发：一次提交多个收件人，服务端异步投递。
      *
      * @param body {@code bizType/channel/params/receivers}
@@ -48,6 +60,17 @@ public interface ZMsgClient {
 
     /**
      * 通道清单（有哪些通道可发、各自状态如何）。
+     * <p>
+     * 需要<b>平台身份</b>：它回的是本进程的通道接线（provider 名、是否 mock 兜底），
+     * 属运维视图，AK 客户端拿不到（也不该拿）—— AK 客户端要看自己能用什么，
+     * 调 {@link #clientInfo()}。
      */
     List<Map<String, Object>> channels(String token);
+
+    /**
+     * 这份 AK 自己的单子：appCode / 日配额 / 已用额度 / 允许的通道。
+     * <p>
+     * 需要<b>客户端 AK</b>（没建 AK 就抛 {@link IllegalStateException}）。
+     */
+    Map<String, Object> clientInfo();
 }

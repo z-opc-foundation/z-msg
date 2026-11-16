@@ -50,7 +50,27 @@ public class RemoteZMsgClient implements ZMsgClient {
         if (request == null) {
             throw new IllegalArgumentException("请求体不能为空");
         }
-        return post("/api/msg/send", request.toMap(), token);
+        return post(sendPath(), request.toMap(), token);
+    }
+
+    @Override
+    public Map<String, Object> sendRaw(Map<String, Object> body, String token) {
+        if (body == null) {
+            throw new IllegalArgumentException("请求体不能为空");
+        }
+        return post(sendPath(), body, token);
+    }
+
+    /**
+     * 发消息打哪个端点：<b>有 AK 走对外端点，没有 AK 走平台端点</b>。
+     * <p>
+     * 两者的差别是宿主的登录闸门：平台端点 {@code /api/msg/send} 在闸门内，
+     * 要么带用户 cookie / Bearer token，要么带 AK（闸门放行后由 z-msg 自己判 AK）；
+     * 对外端点 {@code /api/msg/open/send} 豁免了闸门（{@code @NoLogin}），
+     * 所以它<b>只认 AK</b> —— 机器对机器没有用户身份，只能走这条。
+     */
+    private String sendPath() {
+        return apiKey != null ? "/api/msg/open/send" : "/api/msg/send";
     }
 
     @Override
@@ -69,6 +89,21 @@ public class RemoteZMsgClient implements ZMsgClient {
             path.append("&userId=").append(userId);
         }
         return post(path.toString(), params == null ? Collections.<String, Object>emptyMap() : params, token);
+    }
+
+    @Override
+    public Map<String, Object> clientInfo() {
+        if (apiKey == null) {
+            throw new IllegalStateException("clientInfo 需要客户端 AK："
+                    + "用 ZMsgClientFactory.remote(baseUrl, apiKey) 建客户端");
+        }
+        Object data = call("GET", "/api/msg/open/client/me", null, null);
+        if (data instanceof Map) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> m = (Map<String, Object>) data;
+            return m;
+        }
+        return Collections.emptyMap();
     }
 
     @Override

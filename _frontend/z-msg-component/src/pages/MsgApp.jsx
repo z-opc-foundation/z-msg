@@ -3,6 +3,7 @@ import Inbox from './Inbox'
 import TemplateList from './TemplateList'
 import DeliveryLogs from './DeliveryLogs'
 import BatchTasks from './BatchTasks'
+import SendMessage from './SendMessage'
 
 /**
  * z-msg 消息中心 — OpsWorkbench 以 /msg/* 通配挂进来
@@ -19,6 +20,7 @@ export default function MsgApp() {
             <Route path="template" element={<TemplateList/>}/>
             <Route path="delivery" element={<DeliveryLogs/>}/>
             <Route path="batch" element={<BatchTasks/>}/>
+            <Route path="send" element={<SendMessage/>}/>
         </Routes>
     )
 }

@@ -86,10 +86,12 @@ public class ZMsgClientTest {
         assertNotNull(data);
         assertEquals("m1", data.get("msgId"));
         assertEquals("msga-test-key", lastApiKey.get(), "AK 身份必须带 X-Api-Key 头");
-        assertTrue(lastBody.get().contains("\"userId\":1001"), "请求体应带 userId，实际 " + lastBody.get());
+        assertTrue(lastBody.get().contains("\"user_id\":1001"),
+                "请求体应带 user_id（平台全局 Jackson 是 SNAKE_CASE，camelCase 键会被静默丢掉），实际 " + lastBody.get());
         assertTrue(lastBody.get().contains("标题"), "请求体应带 subject，实际 " + lastBody.get());
         assertTrue(!lastBody.get().contains("msga-test-key"), "AK 不能出现在 body 里，实际 " + lastBody.get());
-        assertEquals("/api/msg/send", lastPath.get());
+        assertEquals("/api/msg/open/send", lastPath.get(),
+                "带 AK 走对外端点（机器对机器那条路豁免了宿主登录闸门）");
     }
 
     @Test
@@ -99,6 +101,25 @@ public class ZMsgClientTest {
 
         assertEquals("Bearer user-token-xyz", lastAuth.get());
         assertTrue(lastApiKey.get() == null, "没配 AK 时不该有 X-Api-Key 头");
+        assertEquals("/api/msg/send", lastPath.get(),
+                "没配 AK 时走平台端点（页面上的人发消息那条路）");
+    }
+
+    @Test
+    public void clientInfoRequiresApiKeyAndReadsOwnProfile() {
+        response = "{\"success\":true,\"data\":{\"appCode\":\"z-script\",\"allowedChannels\":\"IN_APP\"},\"code\":0}";
+        ZMsgClient client = ZMsgClientFactory.remote("http://127.0.0.1:" + port, "msga-x");
+        Map<String, Object> info = client.clientInfo();
+
+        assertEquals("z-script", info.get("appCode"));
+        assertEquals("/api/msg/open/client/me", lastPath.get());
+        assertEquals("msga-x", lastApiKey.get(), "自省端点同样要带 AK");
+    }
+
+    @Test
+    public void clientInfoWithoutApiKeyFailsFast() {
+        ZMsgClient client = ZMsgClientFactory.remote("http://127.0.0.1:" + port);
+        assertThrows(IllegalStateException.class, () -> client.clientInfo());
     }
 
     @Test

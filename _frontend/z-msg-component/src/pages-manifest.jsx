@@ -1,4 +1,4 @@
-import { HomeOutlined, InboxOutlined, MailOutlined, ReadOutlined, SendOutlined, UnorderedListOutlined } from '@ant-design/icons'
+import { HomeOutlined, InboxOutlined, MailOutlined, MessageOutlined, ReadOutlined, SendOutlined, UnorderedListOutlined } from '@ant-design/icons'
 import TemplateList from './pages/TemplateList'
 import DeliveryLogs from './pages/DeliveryLogs'
 
@@ -10,6 +10,7 @@ import Inbox from './pages/Inbox.jsx'
 import BatchTasks from './pages/BatchTasks.jsx'
 import MsgApp from './pages/MsgApp.jsx'
 import ComponentDocPage from './pages/ComponentDoc.jsx'
+import SendMessage from './pages/SendMessage.jsx'
 
 /** 菜单 + 路由清单（lead 008 §10/§14/§16 批量落地）。App 壳在 suit 侧组装。 */
 export const appMeta = { title: 'z-msg 消息中心', short: 'z-msg' }
@@ -20,6 +21,7 @@ export const menuItems = [
     { key: '/z-msg/templates', label: '消息模板', icon: <MailOutlined /> },
     { key: '/z-msg/delivery', label: '投递记录', icon: <SendOutlined /> },
     { key: '/z-msg/batch', label: '批量任务', icon: <UnorderedListOutlined /> },
+    { key: '/z-msg/send', label: '发消息', icon: <MessageOutlined /> },
     { key: '/z-msg/docs', label: '组件文档', icon: <ReadOutlined /> },
 ]
 
@@ -29,11 +31,14 @@ export const routes = [
     { path: '/z-msg/templates', title: '消息模板', order: 2, Component: TemplateList },
     { path: '/z-msg/delivery', title: '投递记录', order: 3, Component: DeliveryLogs },
     { path: '/z-msg/batch', title: '批量任务', order: 4, Component: BatchTasks },
+    { path: '/z-msg/send', title: '发消息', order: 5, Component: SendMessage },
     { path: '/z-msg/docs', Component: ComponentDocPage },
     { path: '/z-msg/:rest*', Component: MsgApp },
 ]
 
 export { default as HomePage } from './pages/HomePage'
 export { default as LoginPage } from './pages/LoginPage'
+// 发消息页（2026-11-13）：页面维度直接给任何人发消息
+export { default as SendMessage } from './pages/SendMessage.jsx'
 // 主壳接线用：文档页统一以 ComponentDocPage 这个名字从主入口导出。
 export { default as ComponentDocPage } from './pages/ComponentDoc.jsx'

@@ -1,6 +1,8 @@
 package com.zifang.z.msg.web.api;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.io.Serializable;
 
@@ -33,7 +35,16 @@ public class MsgSendRequest implements Serializable {
 
     /**
      * 归属用户 id（站内信落库、偏好过滤、按用户限流用）。
+     * <p>
+     * <b>为什么显式钉 JSON 名</b>：宿主（z-team）的 {@code JacksonConfig} 把全局命名策略设成
+     * {@code SNAKE_CASE}，而本 DTO 的字段名是 camelCase ⇒ Jackson 找的是 {@code user_id}，
+     * 客户端发的 {@code userId} 被<b>静默丢掉</b>（{@code ignoreUnknown=true} 不报错，
+     * 只是这个字段永远是 null）—— 表现为「明明填了收件人，服务端说没给收件人」。
+     * 这里用 {@code @JsonProperty} 钉住主名（不随全局策略漂移），
+     * 再用 {@code @JsonAlias} 把 camelCase 也收进来：两种拼法都能用。
      */
+    @JsonProperty("user_id")
+    @JsonAlias({"userId"})
     private Long userId;
 
     /**
@@ -49,16 +60,22 @@ public class MsgSendRequest implements Serializable {
     /**
      * 点击跳转链接。
      */
+    @JsonProperty("link_url")
+    @JsonAlias({"linkUrl"})
     private String linkUrl;
 
     /**
      * 业务类型（REGISTER / ORDER_PAID / SECURITY_ALERT ...）。为空时按 {@code DIRECT_SEND} 归档。
      */
+    @JsonProperty("biz_type")
+    @JsonAlias({"bizType"})
     private String bizType;
 
     /**
      * 幂等键：同 channel + bizType + idempotencyKey 只投递一次。
      */
+    @JsonProperty("idempotency_key")
+    @JsonAlias({"idempotencyKey"})
     private String idempotencyKey;
 
     public String getChannel() {

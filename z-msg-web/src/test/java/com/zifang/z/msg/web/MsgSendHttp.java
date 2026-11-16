@@ -37,6 +37,24 @@ final class MsgSendHttp {
         try (OutputStream os = conn.getOutputStream()) {
             os.write(payload);
         }
+        return finish(conn);
+    }
+
+    /**
+     * GET 版（同 {@link #post} 的理由：不走 Spring 的 streaming 写 body，401 拿得到正文）。
+     */
+    static Reply get(int port, String path, String apiKey) throws Exception {
+        HttpURLConnection conn = (HttpURLConnection) new URL(
+                "http://localhost:" + port + path).openConnection();
+        conn.setRequestMethod("GET");
+        conn.setRequestProperty("Accept", "application/json");
+        if (apiKey != null) {
+            conn.setRequestProperty("X-Api-Key", apiKey);
+        }
+        return finish(conn);
+    }
+
+    private static Reply finish(HttpURLConnection conn) throws Exception {
         int status = conn.getResponseCode();
         InputStream stream = status >= 400 ? conn.getErrorStream() : conn.getInputStream();
         String text = "";

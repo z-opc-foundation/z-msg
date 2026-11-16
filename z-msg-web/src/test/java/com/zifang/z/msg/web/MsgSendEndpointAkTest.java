@@ -148,6 +148,37 @@ public class MsgSendEndpointAkTest {
         assertEquals(0, countMessages("MSG-AK-Q2", PROBE_USER), "超配额的那条不该落地");
     }
 
+    /**
+     * 两种拼法都要收：camelCase（{@code userId}）与 snake_case（{@code user_id}）。
+     * <p>
+     * 为什么钉这条：宿主（z-team）的全局 Jackson 策略是 SNAKE_CASE，camelCase 的键会被
+     * <b>静默丢掉</b>（不报错，字段为 null）—— 表现为「明明填了收件人，服务端说没给收件人」。
+     */
+    @Test
+    public void bothCamelCaseAndSnakeCaseKeysAreAccepted() throws Exception {
+        MsgClientService.CreatedClient created = clientService.create(
+                "ak-keys", "拼法用例", null, null, null, null, null);
+
+        MsgSendHttp.Reply camel = exchange(
+                "{\"channel\":\"IN_APP\",\"userId\":" + PROBE_USER
+                        + ",\"content\":\"camel\",\"bizType\":\"MSG-AK-CAMEL\"}",
+                created.getPlainKey());
+        assertEquals(200, camel.status,
+                "camelCase 拼法必须能用，实际 " + camel.status + " body=" + camel.body);
+
+        MsgSendHttp.Reply snake = exchange(
+                "{\"channel\":\"IN_APP\",\"user_id\":" + PROBE_USER
+                        + ",\"content\":\"snake\",\"biz_type\":\"MSG-AK-SNAKE\"}",
+                created.getPlainKey());
+        assertEquals(200, snake.status,
+                "snake_case 拼法必须能用，实际 " + snake.status + " body=" + snake.body);
+
+        assertEquals(1, countMessages("MSG-AK-CAMEL", PROBE_USER),
+                "camelCase 那条应当按 biz_type 归类落库（bizType 没被丢掉）");
+        assertEquals(1, countMessages("MSG-AK-SNAKE", PROBE_USER),
+                "snake_case 那条应当按 biz_type 归类落库");
+    }
+
     @Test
     public void plaintextKeyIsNeverStoredAndCannotBeRecovered() {
         MsgClientService.CreatedClient created = clientService.create(

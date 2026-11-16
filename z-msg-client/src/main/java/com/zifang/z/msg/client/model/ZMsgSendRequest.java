@@ -108,17 +108,21 @@ public class ZMsgSendRequest {
 
     /**
      * 转成请求体 Map（null 字段不带，服务端按缺省处理）。
+     * <p>
+     * <b>键名用 snake_case</b>：宿主（z-team）的全局 Jackson 命名策略是 {@code SNAKE_CASE}，
+     * camelCase 的键会被**静默丢掉**（不报错，只是字段永远为 null）。
+     * 服务端 DTO 同时接受 camelCase（{@code @JsonAlias}），这里按平台口径发 snake_case。
      */
     public Map<String, Object> toMap() {
         Map<String, Object> m = new LinkedHashMap<String, Object>();
         put(m, "channel", channel);
         put(m, "receiver", receiver);
-        put(m, "userId", userId);
+        put(m, "user_id", userId);
         put(m, "subject", subject);
         put(m, "content", content);
-        put(m, "linkUrl", linkUrl);
-        put(m, "bizType", bizType);
-        put(m, "idempotencyKey", idempotencyKey);
+        put(m, "link_url", linkUrl);
+        put(m, "biz_type", bizType);
+        put(m, "idempotency_key", idempotencyKey);
         return m;
     }
 

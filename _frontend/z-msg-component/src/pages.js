@@ -15,6 +15,7 @@ export {
     LoginPage,
     TemplateList,
     DeliveryLogs,
+    SendMessage,
     ComponentDocPage,
     appMeta,
     menuItems,

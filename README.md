@@ -88,13 +88,14 @@
 
 ## 🏗️ 项目结构
 
-7 个 Maven 模块 + 1 个聚合 parent（reactor 里共 8 个 `io.github.yuku123` 坐标）。
+8 个 Maven 模块 + 1 个聚合 parent（reactor 里共 9 个 `io.github.yuku123` 坐标）。
 
 ```
 z-msg/
 ├── pom.xml                  # 聚合 parent：继承 z-boot-parent:1.2.2，${revision}=1.2.2 + flatten(oss)
 ├── _doc/001_arch/04-protocol.md  # 实时协议逐帧规范（本仓唯一 _doc 文件）
 ├── z-msg-api/               # 纯 SPI 与常量，零实现零 Spring
+├── z-msg-client/            # 对外 HTTP SDK（裸 SDK，零 Spring）：AK / 平台 token 双身份，发消息给任意收件人
 ├── z-msg-core/              # 默认 provider（mock/SMTP）+ ChannelRouter + 限流 + 重试 + 模板 + 站内信 + 票签发 + 7 表 DDL
 ├── z-msg-channels/          # 真实外部厂商 provider
 ├── z-msg-web/               # REST Controller + MsgAutoConfiguration + 身份接缝 + 管理面闸门 AdminEndpointGate
@@ -107,6 +108,7 @@ z-msg/
 
 | 模块 | 职责 |
 |---|---|
+| `z-msg-client` | 对外 HTTP SDK（裸 SDK，零 Spring）：`ZMsgClient` 接口 + `RemoteZMsgClient` + `ZMsgClientFactory`，AK（`X-Api-Key`）与平台 token 双身份；给不再内嵌 z-msg-web 的进程用 |
 | `z-msg-api` | 纯 SPI 与常量：`MessageGateway` / `Message` / `Channels` / `ChannelSender` / `RealtimePublisher` / `RealtimeMessage` / `RealtimeTopics` / `TopicAuthorizationPolicy`，零实现零 Spring |
 | `z-msg-core` | 默认 provider（mock / SMTP）、`ChannelRouter`、限流、重试、模板、投递日志、批量、站内信读写侧、`RealtimeTicketService` 签发与校验、7 张表的 DDL |
 | `z-msg-channels` | 真实外部渠道 provider：钉钉/企微/飞书/Slack 群机器人、公众号模板消息、阿里云与腾讯云短信、极光推送、录制 mock；全部 JDK `HttpURLConnection`，不引厂商 SDK |

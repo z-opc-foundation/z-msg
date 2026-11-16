@@ -35,6 +35,17 @@ export const msgApi = {
     deliveryStats: () => request.get('/msg/delivery/stats'),
 
     batchPage: (page, size) => request.post('/msg/batch/list', {page, size}),
+
+    /**
+     * 直发一条消息：任意通道 + 任意收件人 + 运行时全文。
+     *
+     * 身份：当前登录态（宿主注入的 MsgPrincipalResolver 从 SSO 凭证解 userId）。
+     * 2026-11-13 起 send 端点要身份了 —— 没有 AK 也没有登录态 ⇒ 401。
+     */
+    send: (payload) => request.post('/msg/send', payload),
+
+    /** 通道清单（含每个通道是不是只有 mock 兜底）。 */
+    channels: () => request.get('/msg/channel/list'),
 }
 
 /**
