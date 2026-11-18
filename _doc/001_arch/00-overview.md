@@ -12,7 +12,7 @@ z-msg 是 z-opc-foundation 的**多通道消息 + 实时下发基础设施**：�
 `z-msg.channel.<CH>.provider` 一行配置，业务侧不改。
 
 **Maven 坐标：** `io.github.yuku123:z-msg:${revision}`（当前 `1.2.2`，根 POM `packaging=pom`），
-父项目 `io.github.yuku123:z-boot-parent:1.1.0`（`<relativePath/>` 留空；发布件经 flatten `oss` 模式
+父项目 `io.github.yuku123:z-boot-parent:1.2.4`（`<relativePath/>` 留空；发布件经 flatten `oss` 模式
 剥掉 parent，消费者拿到的是自包含 raw pom）。
 
 **技术栈：** Java 8 + Spring Boot 2.7.18 + Maven 多模块（7 个 reactor 模块）；
@@ -22,7 +22,7 @@ WebSocket 走 `spring-boot-starter-websocket`；数据访问走 MyBatis-Plus。
 
 ```
 z-msg/
-├── pom.xml                     # 聚合 POM：父 z-boot-parent:1.1.0，7 个 reactor 模块
+├── pom.xml                     # 聚合 POM：父 z-boot-parent:1.2.4，7 个 reactor 模块
 ├── z-msg-api/                  # 纯 SPI（18 个类，零实现）：MessageGateway / MessageBus / ChannelSender /
 │                               #   RealtimePublisher / RealtimeTransport / TopicAuthorizationPolicy / Channels +
 │                               #   Message / SmsMessage / EmailMessage / RealtimeMessage / SearchResult 等模型

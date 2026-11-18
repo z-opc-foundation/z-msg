@@ -32,7 +32,7 @@
     <parent>
         <groupId>io.github.yuku123</groupId>
         <artifactId>z-boot-parent</artifactId>
-        <version>1.2.3</version>
+        <version>1.2.4</version>
         <relativePath/>
     </parent>
 
@@ -305,7 +305,7 @@
                      要求这条声明**常开**（不挂 central profile）：z-boot-parent 那条 flatten 是
                      <inherited>false</inherited>（z-boot-parent/pom.xml:255-266，它自己用
                      resolveCiFriendliesOnly），不会把 flatten 下发给消费仓 ⇒ 一旦本仓不声明，
-                     加了 <parent> 之后发出去的 pom 就会带着 z-boot-parent:1.0.19 出厂，
+                     加了 <parent> 之后发出去的 pom 就会带着 z-boot-parent:1.2.4 出厂，
                      而本仓中央上现在是自包含 raw pom（repo1 回读 z-msg/z-msg-api/…/z-msg-channels
                      1.2.1 七份，`<parent>` 计数全为 0、com.zifang 计数 0），形状不能被我这一刀改掉。
                      central_pom_scan 的 E 类也只看本仓 pom 链、不跟外部 parent 走 ⇒ 显式写一行。 -->
