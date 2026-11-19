@@ -1,10 +1,14 @@
 package com.zifang.z.msg.web.api;
 
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.api.MessageBus;
 import com.zifang.z.msg.api.MessageEvent;
 import com.zifang.z.msg.core.domain.service.MsgDeliveryLogService;
 import com.zifang.z.msg.web.config.MsgWebProperties;
+import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -12,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.annotation.Resource;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -47,8 +50,10 @@ public class MessageController {
      * 用 {@code z-msg.web.publish-endpoint-enabled=true} 打开。
      */
     @PostMapping("/publish")
-    public Result<String> publish(@RequestParam String eventType, @RequestParam Long userId,
-                                  @RequestBody(required = false) Map<String, Object> params) {
+    @BizApi(summary = "发一个业务事件（站内信通道会落库）", description = "发一个业务事件（站内信通道会落库）。 默认关闭：它能往任意 userId 的收件箱里塞消息，等于一个未认证的钓鱼入口。 这个端点本来是给服务间调用用的，宿主确认调用方在网络边界内之后， 用 z-msg.web.publish-endpoint-enabled=true 打开。", tags = { "z-msg" })
+    public Result<String> publish(@RequestParam @BizParam(name = "eventType", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String eventType, @RequestParam @BizParam(name = "userId", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.QUERY) Long userId,
+                                  @RequestBody(required = false)
+                                  @BizParam(name = "params", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> params) {
         if (!webProperties.isPublishEndpointEnabled()) {
             return Result.<String>fail("publish 端点未启用"
                     + "（确认调用方在网络边界内后设 z-msg.web.publish-endpoint-enabled=true）").code(403);
@@ -58,6 +63,7 @@ public class MessageController {
     }
 
     @GetMapping("/delivery/stats")
+    @BizApi(summary = "deliveryStats", description = "", tags = { "z-msg" })
     public Result<Map<String, Long>> deliveryStats() {
         Map<String, Long> stats = new HashMap<String, Long>();
         Long success = deliveryLogService.countSuccess(null, null, null);
@@ -69,3 +75,6 @@ public class MessageController {
         return Result.success(stats);
     }
 }
+
+
+

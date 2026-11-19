@@ -1,14 +1,17 @@
 package com.zifang.z.msg.web.api;
 
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.core.domain.entity.MsgClientDO;
 import com.zifang.z.msg.core.domain.service.MsgClientService;
+import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -40,6 +43,7 @@ public class MsgClientController {
     private MsgClientService clientService;
 
     @PostMapping("/list")
+    @BizApi(summary = "list", description = "", tags = { "z-msg" })
     public Result<List<Map<String, Object>>> list() {
         List<Map<String, Object>> out = new ArrayList<>();
         for (MsgClientDO c : clientService.list()) {
@@ -52,7 +56,8 @@ public class MsgClientController {
      * 建凭据。返回里的 {@code plainKey} 只此一次可见 —— 服务端只留 sha-256 摘要。
      */
     @PostMapping("/create")
-    public Result<Map<String, Object>> create(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "建凭据。返回里的 plainKey 只此一次可见 —— 服务端只留 sha-256 摘要", description = "建凭据。返回里的 plainKey 只此一次可见 —— 服务端只留 sha-256 摘要。", tags = { "z-msg" })
+    public Result<Map<String, Object>> create(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         String appCode = str(body.get("appCode"));
         String appName = str(body.get("appName"));
         Integer dailyQuota = num(body.get("dailyQuota"));
@@ -71,7 +76,8 @@ public class MsgClientController {
     }
 
     @PostMapping("/update")
-    public Result<Boolean> update(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "update", description = "", tags = { "z-msg" })
+    public Result<Boolean> update(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         Long id = longNum(body.get("id"));
         boolean ok = clientService.update(id,
                 str(body.get("appName")),
@@ -84,7 +90,8 @@ public class MsgClientController {
     }
 
     @PostMapping("/rotate")
-    public Result<Map<String, Object>> rotate(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "rotate", description = "", tags = { "z-msg" })
+    public Result<Map<String, Object>> rotate(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         Long id = longNum(body.get("id"));
         MsgClientService.CreatedClient created = clientService.rotate(id);
         Map<String, Object> data = toView(created.getClient());
@@ -94,7 +101,8 @@ public class MsgClientController {
     }
 
     @PostMapping("/toggle")
-    public Result<Boolean> toggle(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "toggle", description = "", tags = { "z-msg" })
+    public Result<Boolean> toggle(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         Long id = longNum(body.get("id"));
         boolean enabled = !Boolean.FALSE.equals(body.get("enabled"))
                 && !"false".equalsIgnoreCase(str(body.get("enabled")));
@@ -102,7 +110,8 @@ public class MsgClientController {
     }
 
     @PostMapping("/delete")
-    public Result<Boolean> delete(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "delete", description = "", tags = { "z-msg" })
+    public Result<Boolean> delete(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         Long id = longNum(body.get("id"));
         return Result.success(clientService.delete(id));
     }
@@ -173,3 +182,6 @@ public class MsgClientController {
         }
     }
 }
+
+
+

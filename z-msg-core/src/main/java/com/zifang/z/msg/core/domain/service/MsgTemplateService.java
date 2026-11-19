@@ -3,17 +3,18 @@ package com.zifang.z.msg.core.domain.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.core.domain.entity.MsgTemplateDO;
 import com.zifang.z.msg.core.domain.entity.MsgTemplateVersionDO;
 import com.zifang.z.msg.core.domain.mapper.MsgTemplateMapper;
 import com.zifang.z.msg.core.domain.mapper.MsgTemplateVersionMapper;
 import com.zifang.z.msg.core.template.MessageTemplateEngine;
+import jakarta.annotation.Resource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 
 /**
@@ -35,6 +36,7 @@ public class MsgTemplateService {
     @Resource
     private MessageTemplateEngine templateEngine;
 
+    @BizMethod(name = "page", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public IPage<MsgTemplateDO> page(int pageNum, int pageSize, String bizType, String channel) {
         LambdaQueryWrapper<MsgTemplateDO> qw = new LambdaQueryWrapper<>();
         if (bizType != null && !bizType.isEmpty()) {
@@ -47,11 +49,13 @@ public class MsgTemplateService {
         return templateMapper.selectPage(new Page<>(pageNum, pageSize), qw);
     }
 
+    @BizMethod(name = "getById", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public MsgTemplateDO getById(Long id) {
         return templateMapper.selectById(id);
     }
 
     @Transactional
+    @BizMethod(name = "create", module = "z-msg", description = "", operation = BizMethod.Operation.CREATE)
     public MsgTemplateDO create(MsgTemplateDO t) {
         if (t.getStatus() == null) {
             t.setStatus(1);
@@ -68,6 +72,7 @@ public class MsgTemplateService {
     }
 
     @Transactional
+    @BizMethod(name = "update", module = "z-msg", description = "", operation = BizMethod.Operation.UPDATE)
     public MsgTemplateDO update(Long id, MsgTemplateDO t, String changeNote, String operator) {
         MsgTemplateDO old = templateMapper.selectById(id);
         if (old == null) {
@@ -87,6 +92,7 @@ public class MsgTemplateService {
     }
 
     @Transactional
+    @BizMethod(name = "delete", module = "z-msg", description = "", operation = BizMethod.Operation.DELETE)
     public boolean delete(Long id) {
         templateMapper.deleteById(id);
         templateEngine.refreshCache();
@@ -97,6 +103,7 @@ public class MsgTemplateService {
      * 审批通过：status → 启用(1)，记录审批版本快照
      */
     @Transactional
+    @BizMethod(name = "审批通过：status → 启用(1)，记录审批版本快照", module = "z-msg", description = "审批通过：status → 启用(1)，记录审批版本快照", operation = BizMethod.Operation.ACTION)
     public MsgTemplateDO approve(Long id, String approver, String remark) {
         MsgTemplateDO t = templateMapper.selectById(id);
         if (t == null) {
@@ -118,6 +125,7 @@ public class MsgTemplateService {
      * 审批拒绝：status → 停用(2)，记录拒绝原因
      */
     @Transactional
+    @BizMethod(name = "审批拒绝：status → 停用(2)，记录拒绝原因", module = "z-msg", description = "审批拒绝：status → 停用(2)，记录拒绝原因", operation = BizMethod.Operation.ACTION)
     public MsgTemplateDO reject(Long id, String approver, String reason) {
         MsgTemplateDO t = templateMapper.selectById(id);
         if (t == null) {
@@ -145,3 +153,6 @@ public class MsgTemplateService {
         versionMapper.insert(v);
     }
 }
+
+
+

@@ -1,21 +1,22 @@
 package com.zifang.z.msg.core.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.zifang.util.json.JsonUtil;
 import com.zifang.util.json.define.TypeReference;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.api.FanOutResult;
 import com.zifang.z.msg.core.channel.ChannelRouter;
 import com.zifang.z.msg.core.domain.entity.MsgBatchTaskDO;
 import com.zifang.z.msg.core.domain.mapper.MsgBatchTaskMapper;
 import com.zifang.z.msg.core.template.MessageTemplateEngine;
+import jakarta.annotation.Resource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -73,6 +74,7 @@ public class MsgBatchSendService {
     /**
      * 创建批量任务（立即返回 taskId，异步执行）
      */
+    @BizMethod(name = "创建批量任务（立即返回 taskId，异步执行）", module = "z-msg", description = "创建批量任务（立即返回 taskId，异步执行）", operation = BizMethod.Operation.CREATE)
     public MsgBatchTaskDO submit(String bizType, String channel,
                                  Map<String, String> params,
                                  List<Map<String, String>> receivers) {
@@ -119,6 +121,7 @@ public class MsgBatchSendService {
      *
      * @return false 表示任务不存在，或已处于终态（无可取消）
      */
+    @BizMethod(name = "协作式取消：正在跑的任务在下一条之前停下，未跑的任务直接标记取消", module = "z-msg", description = "协作式取消：正在跑的任务在下一条之前停下，未跑的任务直接标记取消。 运行中的任务也必须落库 。此前只有 PENDING 才写 status=5， RUNNING 只是往内存集合里塞个标记 —— 于是 #isCancelRequested 里那条\"查库\"的跨进程分支，对 正在跑的任务 永远是 false， 而上面那句注释（\"跨进程取消靠库里那一列\"）对运行中任务压根不成立。 更糟的是 #executeAsync 的执行循环每处理完一条就整行 updateById， 会把 cancel 刚落的 5 又改回 1（RUNNING）。三处一起才造成\"取消请求丢失\"。", operation = BizMethod.Operation.ACTION)
     public boolean cancel(Long taskId) {
         MsgBatchTaskDO task = batchTaskMapper.selectById(taskId);
         if (task == null) {
@@ -146,6 +149,7 @@ public class MsgBatchSendService {
         return true;
     }
 
+    @BizMethod(name = "executeAsync", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public void executeAsync(Long taskId) {
         MsgBatchTaskDO task = batchTaskMapper.selectById(taskId);
         if (task == null) {
@@ -292,10 +296,12 @@ public class MsgBatchSendService {
         }
     }
 
+    @BizMethod(name = "getTask", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public MsgBatchTaskDO getTask(Long id) {
         return batchTaskMapper.selectById(id);
     }
 
+    @BizMethod(name = "page", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public IPage<MsgBatchTaskDO> page(int pageNum, int pageSize, Integer status) {
         LambdaQueryWrapper<MsgBatchTaskDO> qw = new LambdaQueryWrapper<>();
         if (status != null) {
@@ -331,3 +337,6 @@ public class MsgBatchSendService {
         }
     }
 }
+
+
+

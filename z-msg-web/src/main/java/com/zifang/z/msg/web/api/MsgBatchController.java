@@ -2,11 +2,14 @@ package com.zifang.z.msg.web.api;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.core.domain.entity.MsgBatchTaskDO;
 import com.zifang.z.msg.core.domain.service.MsgBatchSendService;
+import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.annotation.Resource;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +30,8 @@ public class MsgBatchController {
     private MsgBatchSendService batchSendService;
 
     @PostMapping("/submit")
-    public Result<Map<String, Object>> submit(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "submit", description = "", tags = { "z-msg" })
+    public Result<Map<String, Object>> submit(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         String bizType = (String) body.getOrDefault("bizType", "");
         String channel = (String) body.getOrDefault("channel", "IN_APP");
         @SuppressWarnings("unchecked")
@@ -43,13 +47,15 @@ public class MsgBatchController {
     }
 
     @GetMapping("/{id}")
-    public Result<MsgBatchTaskDO> progress(@PathVariable Long id) {
+    @BizApi(summary = "progress", description = "", tags = { "z-msg" })
+    public Result<MsgBatchTaskDO> progress(@PathVariable @BizParam(name = "id", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.PATH) Long id) {
         MsgBatchTaskDO task = batchSendService.getTask(id);
         return task != null ? Result.success(task) : Result.<MsgBatchTaskDO>fail("任务不存在");
     }
 
     @PostMapping("/list")
-    public Result<IPage<MsgBatchTaskDO>> list(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "list", description = "", tags = { "z-msg" })
+    public Result<IPage<MsgBatchTaskDO>> list(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         int page = body.containsKey("page") ? ((Number) body.get("page")).intValue() : 1;
         int size = body.containsKey("size") ? ((Number) body.get("size")).intValue() : 20;
         Integer status = body.containsKey("status") ? ((Number) body.get("status")).intValue() : null;
@@ -57,7 +63,8 @@ public class MsgBatchController {
     }
 
     @PostMapping("/{id}/cancel")
-    public Result<String> cancel(@PathVariable Long id) {
+    @BizApi(summary = "cancel", description = "", tags = { "z-msg" })
+    public Result<String> cancel(@PathVariable @BizParam(name = "id", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.PATH) Long id) {
         // 暂不实现真实取消（标记为 failed），未来扩展
         MsgBatchTaskDO task = batchSendService.getTask(id);
         if (task == null) {
@@ -70,3 +77,6 @@ public class MsgBatchController {
         return Result.success("cancel_not_implemented");
     }
 }
+
+
+

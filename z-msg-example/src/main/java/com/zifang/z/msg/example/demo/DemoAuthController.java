@@ -1,12 +1,15 @@
 package com.zifang.z.msg.example.demo;
 
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpSession;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpSession;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -49,8 +52,10 @@ public class DemoAuthController {
     }
 
     @PostMapping("/demo/login")
-    public Result<Map<String, Object>> login(HttpServletRequest request, @RequestParam long as,
-                                             @RequestParam(value = "tab", required = false) String tab) {
+    @BizApi(summary = "login", description = "", tags = { "z-msg" })
+    public Result<Map<String, Object>> login(HttpServletRequest request, @RequestParam @BizParam(name = "as", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.QUERY) long as,
+                                             @RequestParam(value = "tab", required = false)
+                                             @BizParam(name = "tab", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String tab) {
         Long userId = Long.valueOf(as);
         if (!DEMO_USERS.containsKey(userId)) {
             return Result.<Map<String, Object>>fail("演示账号只有 1001 / 1002").code(400);
@@ -65,6 +70,7 @@ public class DemoAuthController {
     }
 
     @PostMapping("/demo/logout")
+    @BizApi(summary = "logout", description = "", tags = { "z-msg" })
     public Result<Boolean> logout(HttpServletRequest request) {
         HttpSession session = request.getSession(false);
         if (session != null) {
@@ -93,3 +99,6 @@ public class DemoAuthController {
         return data;
     }
 }
+
+
+

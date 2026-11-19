@@ -1,16 +1,19 @@
 package com.zifang.z.msg.web.api;
 
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.api.ChannelSender;
 import com.zifang.z.msg.api.Channels;
 import com.zifang.z.msg.core.config.MessageProperties;
 import com.zifang.z.msg.core.sender.SenderRegistry;
+import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.annotation.Resource;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -35,6 +38,7 @@ public class MsgChannelController {
     private MessageProperties properties;
 
     @GetMapping("/list")
+    @BizApi(summary = "list", description = "", tags = { "z-msg" })
     public Result<List<Map<String, Object>>> list() {
         Set<String> all = new LinkedHashSet<String>(Channels.ALL);
         all.addAll(senderRegistry.channels());
@@ -61,7 +65,8 @@ public class MsgChannelController {
      * 单条通道的明细，包含 mock 兜底时该看的那句诊断。
      */
     @GetMapping("/detail")
-    public Result<Map<String, Object>> detail(@RequestParam String channel) {
+    @BizApi(summary = "单条通道的明细，包含 mock 兜底时该看的那句诊断", description = "单条通道的明细，包含 mock 兜底时该看的那句诊断。", tags = { "z-msg" })
+    public Result<Map<String, Object>> detail(@RequestParam @BizParam(name = "channel", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String channel) {
         String normalized = Channels.normalize(channel);
         if (normalized == null || !Channels.isKnown(normalized)) {
             return Result.<Map<String, Object>>fail("未知通道: " + channel).code(400);
@@ -77,3 +82,6 @@ public class MsgChannelController {
         return Result.success(row);
     }
 }
+
+
+

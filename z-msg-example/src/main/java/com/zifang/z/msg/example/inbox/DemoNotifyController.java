@@ -1,19 +1,22 @@
 package com.zifang.z.msg.example.inbox;
 
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.api.Channels;
 import com.zifang.z.msg.api.Message;
 import com.zifang.z.msg.api.MessageGateway;
 import com.zifang.z.msg.api.MessageSendResult;
 import com.zifang.z.msg.example.demo.DemoAuthController;
 import com.zifang.z.msg.web.auth.MsgPrincipalResolver;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -42,9 +45,12 @@ public class DemoNotifyController {
      * @param to 收信人 userId；省略则发给自己（两个人互相@时填对方）
      */
     @PostMapping
+    @BizApi(summary = "notify", description = "", tags = { "z-msg" })
     public Result<MessageSendResult> notify(HttpServletRequest request,
-                                            @RequestParam(required = false) Long to,
-                                            @RequestParam(defaultValue = "有一条新消息") String title) {
+                                            @RequestParam(required = false)
+                                            @BizParam(name = "to", type = BizField.FieldType.INTEGER, description = "收信人 userId；省略则发给自己（两个人互相@时填对方）", position = BizParam.Position.QUERY) Long to,
+                                            @RequestParam(defaultValue = "有一条新消息")
+                                            @BizParam(name = "title", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String title) {
         Long me = principalResolver.require(request);
         Long receiver = to == null ? me : to;
         if (!DemoAuthController.DEMO_USERS.containsKey(receiver)) {
@@ -62,3 +68,6 @@ public class DemoNotifyController {
         return Result.success(gateway.send(message));
     }
 }
+
+
+

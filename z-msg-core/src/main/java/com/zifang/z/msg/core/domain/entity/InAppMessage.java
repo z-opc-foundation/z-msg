@@ -3,58 +3,79 @@ package com.zifang.z.msg.core.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizModel;
 
 import java.time.LocalDateTime;
 
+@BizModel(name = "z_msg_message", module = "z-msg", description = "z_msg_message")
 @TableName("z_msg_message")
 public class InAppMessage {
 
     @TableId(type = IdType.AUTO)
+    @BizField(name = "id", type = BizField.FieldType.INTEGER)
     private Long id;
+    @BizField(name = "收件人", type = BizField.FieldType.INTEGER)
     private Long userId;
+    @BizField(name = "业务类型，等于 Message.bizType", type = BizField.FieldType.STRING)
     private String eventType;
+    @BizField(name = "title", type = BizField.FieldType.STRING)
     private String title;
+    @BizField(name = "已渲染正文（入库即定稿，不存模板占位符）", type = BizField.FieldType.STRING)
     private String content;
+    @BizField(name = "0=未读 1=已读", type = BizField.FieldType.INTEGER)
     private Integer isRead;
     /**
      * 幂等键(同一 bizType+user+key 不重复入库)
      */
+    @BizField(name = "幂等键(同一 bizType+user+key 不重复入库)", type = BizField.FieldType.STRING)
     private String dedupKey;
     /**
      * 消息跳转链接
      */
+    @BizField(name = "消息跳转链接", type = BizField.FieldType.STRING)
     private String linkUrl;
+    @BizField(name = "tenantCode", type = BizField.FieldType.STRING)
     private String tenantCode;
+    @BizField(name = "domainCode", type = BizField.FieldType.STRING)
     private String domainCode;
+    @BizField(name = "createdTime", type = BizField.FieldType.DATETIME)
     private LocalDateTime createdTime;
 
     /**
      * 1.1.0 全链路消息 id（与投递日志、实时帧共用一个标识，前端据此去重与已读回执）
      */
+    @BizField(name = "全局消息号(UUID)，投递日志/实时帧按它对齐", type = BizField.FieldType.STRING)
     private String msgId;
     /**
      * 1.1.0 消息大类：NOTICE 通知 / TODO 待办 / ALERT 告警 / PROMO 运营，前端按类分 tab
      */
+    @BizField(name = "NOTICE/CHAT/SYS…，前端渲染样式", type = BizField.FieldType.STRING)
     private String msgType;
     /**
      * 1.1.0 优先级，0 普通 1 重要 2 紧急，与 {@code Message.priority} 对齐
      */
+    @BizField(name = "0=普通 1=重要 2=紧急；>=1 穿过硬静默", type = BizField.FieldType.INTEGER)
     private Integer priority;
     /**
      * 1.1.0 过期时间，为空永不过期；列表查询会过滤已过期项
      */
+    @BizField(name = "1.1.0 过期时间，为空永不过期；列表查询会过滤已过期项", type = BizField.FieldType.DATETIME)
     private LocalDateTime expireAt;
     /**
      * 1.1.0 是否置顶
      */
+    @BizField(name = "1.1.0 是否置顶", type = BizField.FieldType.INTEGER)
     private Integer pinned;
     /**
      * 1.1.0 已读时间，未读为 null（isRead 仍保留以便老代码继续用 0/1 判断）
      */
+    @BizField(name = "置已读的时间，未读为 NULL", type = BizField.FieldType.DATETIME)
     private LocalDateTime readTime;
     /**
      * 1.1.0 逻辑删除，列表默认过滤 deleted=0
      */
+    @BizField(name = "用户删除标记（软删）", type = BizField.FieldType.INTEGER)
     private Integer deleted;
 
     public Long getId() {
@@ -201,3 +222,6 @@ public class InAppMessage {
         this.createdTime = createdTime;
     }
 }
+
+
+

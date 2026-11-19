@@ -3,6 +3,8 @@ package com.zifang.z.msg.core.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizModel;
 
 import java.time.LocalDateTime;
 
@@ -11,15 +13,19 @@ import java.time.LocalDateTime;
  * <p>
  * Phase 2 引入:每次外发通道 (sms/email/webhook/im/push) 的发送结果都落一行,用于状态查询 / 统计 / 重试。
  */
+@BizModel(name = "投递日志 DO", module = "z-msg", description = "投递日志 DO Phase 2 引入:每次外发通道 (sms/email/webhook/im/push) 的发送结果都落一行,用于状态查询 / 统计 / 重试。")
 @TableName("z_msg_delivery_log")
 public class MsgDeliveryLogDO {
 
     @TableId(type = IdType.AUTO)
+    @BizField(name = "id", type = BizField.FieldType.INTEGER)
     private Long id;
+    @BizField(name = "bizType", type = BizField.FieldType.STRING)
     private String bizType;
     /**
      * SMS / EMAIL / WEBHOOK / IM / PUSH / IN_APP
      */
+    @BizField(name = "介质", type = BizField.FieldType.STRING)
     private String channel;
     /**
      * 出站幂等位。存的是 {@code channel|bizType|key|userId|receiver} 拼成的去重令牌
@@ -30,33 +36,52 @@ public class MsgDeliveryLogDO {
      * 唯一索引允许多个 NULL，所以不占位的行彼此不会撞；这一条与
      * {@code ChannelRouter} 里"没送出去就不占位"的判断必须成对维护。</p>
      */
+    @BizField(name = "出站幂等位(去重令牌，非裸 key)；仅已送达的行持有，NULL 不占位", type = BizField.FieldType.STRING)
     private String idempotencyKey;
     /**
      * 实际 provider (mock/smtp/aliyun/wecom...)
      */
+    @BizField(name = "实际 provider (mock/smtp/aliyun/wecom...)", type = BizField.FieldType.STRING)
     private String provider;
     /**
      * 接收方 (手机号 / 邮箱 / url / userId)
      */
+    @BizField(name = "接收方 (手机号 / 邮箱 / url / userId)", type = BizField.FieldType.STRING)
     private String receiver;
+    @BizField(name = "userId", type = BizField.FieldType.INTEGER)
     private Long userId;
+    @BizField(name = "命中了哪份模板，NULL=用了报文自带文案", type = BizField.FieldType.INTEGER)
     private Long templateId;
+    @BizField(name = "renderedSubject", type = BizField.FieldType.STRING)
     private String renderedSubject;
+    @BizField(name = "renderedContent", type = BizField.FieldType.STRING)
     private String renderedContent;
+    @BizField(name = "厂商回执号，排障按它找厂商工单", type = BizField.FieldType.STRING)
     private String providerMessageId;
     /**
      * 0=pending 1=success 2=failed 3=retrying
      */
+    @BizField(name = "1=success 2=failed 3=mock 4=skipped", type = BizField.FieldType.INTEGER)
     private Integer status;
+    @BizField(name = "errorCode", type = BizField.FieldType.STRING)
     private String errorCode;
+    @BizField(name = "errorMessage", type = BizField.FieldType.STRING)
     private String errorMessage;
+    @BizField(name = "retryCount", type = BizField.FieldType.INTEGER)
     private Integer retryCount;
+    @BizField(name = "maxRetry", type = BizField.FieldType.INTEGER)
     private Integer maxRetry;
+    @BizField(name = "nextRetryTime", type = BizField.FieldType.DATETIME)
     private LocalDateTime nextRetryTime;
+    @BizField(name = "本次厂商调用耗时", type = BizField.FieldType.INTEGER)
     private Integer durationMs;
+    @BizField(name = "tenantCode", type = BizField.FieldType.STRING)
     private String tenantCode;
+    @BizField(name = "domainCode", type = BizField.FieldType.STRING)
     private String domainCode;
+    @BizField(name = "createdTime", type = BizField.FieldType.DATETIME)
     private LocalDateTime createdTime;
+    @BizField(name = "updatedTime", type = BizField.FieldType.DATETIME)
     private LocalDateTime updatedTime;
 
     public Long getId() {
@@ -235,3 +260,6 @@ public class MsgDeliveryLogDO {
         this.updatedTime = updatedTime;
     }
 }
+
+
+

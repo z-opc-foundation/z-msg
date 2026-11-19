@@ -1,11 +1,12 @@
 package com.zifang.z.msg.core.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.core.domain.entity.MsgUserPreferenceDO;
 import com.zifang.z.msg.core.domain.mapper.MsgUserPreferenceMapper;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.HashSet;
@@ -28,6 +29,7 @@ public class MsgUserPreferenceService {
      * 获取用户允许的渠道集合。
      * 返回 null 表示不限 (全部允许);返回空集合表示全部屏蔽。
      */
+    @BizMethod(name = "获取用户允许的渠道集合", module = "z-msg", description = "获取用户允许的渠道集合。 返回 null 表示不限 (全部允许);返回空集合表示全部屏蔽。", operation = BizMethod.Operation.QUERY)
     public Set<String> getAllowedChannels(Long userId, String bizType) {
         if (userId == null) {
             return null;
@@ -58,6 +60,7 @@ public class MsgUserPreferenceService {
      * quietStart..quietEnd 区间内不发送。
      * 跨午夜的情况 (23:00-07:00) 不支持 (简单实现)。
      */
+    @BizMethod(name = "判断是否处于静默时段", module = "z-msg", description = "判断是否处于静默时段。 quietStart..quietEnd 区间内不发送。 跨午夜的情况 (23:00-07:00) 不支持 (简单实现)。", operation = BizMethod.Operation.ACTION)
     public boolean isInQuietHours(Long userId, String bizType) {
         MsgUserPreferenceDO pref = lookup(userId, bizType);
         if (pref == null) {
@@ -79,6 +82,7 @@ public class MsgUserPreferenceService {
         }
     }
 
+    @BizMethod(name = "lookup", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public MsgUserPreferenceDO lookup(Long userId, String bizType) {
         LambdaQueryWrapper<MsgUserPreferenceDO> qw = new LambdaQueryWrapper<>();
         qw.eq(MsgUserPreferenceDO::getUserId, userId)
@@ -88,6 +92,7 @@ public class MsgUserPreferenceService {
     }
 
     @org.springframework.transaction.annotation.Transactional
+    @BizMethod(name = "upsert", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public MsgUserPreferenceDO upsert(MsgUserPreferenceDO p) {
         MsgUserPreferenceDO old = lookup(p.getUserId(), p.getBizType());
         if (old != null) {
@@ -106,6 +111,7 @@ public class MsgUserPreferenceService {
      * 删除自己的偏好。user_id 进 WHERE，所以"忘了判归属"这种写法在这里不存在；
      * 原来的 {@code deleteById(id)} 允许任何人拿别人的行号删掉别人的通知设置。
      */
+    @BizMethod(name = "删除自己的偏好。user_id 进 WHERE，所以\"忘了判归属\"这种写法在这里不存在", module = "z-msg", description = "删除自己的偏好。user_id 进 WHERE，所以\"忘了判归属\"这种写法在这里不存在； 原来的 deleteById(id) 允许任何人拿别人的行号删掉别人的通知设置。", operation = BizMethod.Operation.DELETE)
     public boolean deleteOwned(Long id, Long userId) {
         if (id == null || userId == null) {
             return false;
@@ -129,3 +135,6 @@ public class MsgUserPreferenceService {
         return set.isEmpty() ? Collections.emptySet() : set;
     }
 }
+
+
+

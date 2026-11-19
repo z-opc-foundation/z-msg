@@ -1,6 +1,7 @@
 package com.zifang.z.msg.im.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.im.domain.entity.ImConversationDO;
 import com.zifang.z.msg.im.domain.entity.ImMemberDO;
 import com.zifang.z.msg.im.domain.entity.ImReadReceiptDO;
@@ -8,12 +9,12 @@ import com.zifang.z.msg.im.domain.mapper.ImMemberMapper;
 import com.zifang.z.msg.im.domain.mapper.ImReadReceiptMapper;
 import com.zifang.z.msg.im.domain.model.ImConversationView;
 import com.zifang.z.msg.im.domain.model.ImUnread;
+import jakarta.annotation.Resource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -68,6 +69,7 @@ public class ImReadService {
      *
      * @return 标记后的游标（若传进来的是旧值，返回的是没被改动的原值）
      */
+    @BizMethod(name = "标记已读：把本人在该会话里的游标推到 uptoSeq", module = "z-msg", description = "标记已读：把本人在该会话里的游标推到 uptoSeq。 三条不变式： 目标值以会话水位 last_msg_seq 封顶 —— 客户端谎报\"我读到 999\" 不能把还没发的消息算成已读； 只前进不回退 —— 迟到的旧回执（弱网重传、多端时钟差）改不动新值， 返回值就是\"当前真实游标\"，调用方据此纠正本地 UI； 回执表 upsert 幂等 —— 同一 (会话, 人) 永远一行，靠 uk_im_receipt_conv_user。", operation = BizMethod.Operation.ACTION)
     public long markRead(Long conversationId, Long userId, long uptoSeq) {
         conversationService.requireMember(conversationId, userId);
         ImConversationDO conv = conversationService.requireConversation(conversationId);
@@ -88,6 +90,7 @@ public class ImReadService {
     /**
      * 未读数：{@code 会话水位 - max(已读游标, 清空游标)}，下限 0。
      */
+    @BizMethod(name = "未读数：会话水位 - max(已读游标, 清空游标)，下限 0", module = "z-msg", description = "未读数：会话水位 - max(已读游标, 清空游标)，下限 0。", operation = BizMethod.Operation.ACTION)
     public long unread(Long conversationId, Long userId) {
         ImMemberDO member = conversationService.requireMember(conversationId, userId);
         ImConversationDO conv = conversationService.requireConversation(conversationId);
@@ -99,6 +102,7 @@ public class ImReadService {
      *
      * @return {@code total}（所有会话未读之和）与 {@code items}（逐会话明细）
      */
+    @BizMethod(name = "未读汇总：本人每个会话一条 + 总数", module = "z-msg", description = "未读汇总：本人每个会话一条 + 总数。", operation = BizMethod.Operation.ACTION)
     public Map<String, Object> unreadSummary(Long userId) {
         List<ImConversationView> rows = conversationService.listMine(userId);
         List<ImUnread> items = new ArrayList<ImUnread>(rows.size());
@@ -120,6 +124,7 @@ public class ImReadService {
      * "谁读到哪"。可见性：只有同会话成员读得到 —— 群聊已读状态本身就是社交信息，
      * 不能让外人拿会话 id 来枚举。返回不含本人以外的人的隐私字段（就三列，够用）。
      */
+    @BizMethod(name = "\"谁读到哪\"。可见性：只有同会话成员读得到 —— 群聊已读状态本身就是社交信息", module = "z-msg", description = "\"谁读到哪\"。可见性：只有同会话成员读得到 —— 群聊已读状态本身就是社交信息， 不能让外人拿会话 id 来枚举。返回不含本人以外的人的隐私字段（就三列，够用）。", operation = BizMethod.Operation.ACTION)
     public List<ImReadReceiptDO> receipts(Long conversationId, Long caller) {
         conversationService.requireMember(conversationId, caller);
         LambdaQueryWrapper<ImReadReceiptDO> qw = new LambdaQueryWrapper<ImReadReceiptDO>();
@@ -129,6 +134,7 @@ public class ImReadService {
         return rows == null ? Collections.<ImReadReceiptDO>emptyList() : rows;
     }
 
+    @BizMethod(name = "currentReadSeq", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public long currentReadSeq(Long conversationId, Long userId) {
         ImMemberDO member = conversationService.requireMember(conversationId, userId);
         return member.getLastReadSeq() == null ? 0L : member.getLastReadSeq().longValue();
@@ -173,3 +179,6 @@ public class ImReadService {
         receiptMapper.advanceReadSeq(conversationId, userId, seq);
     }
 }
+
+
+

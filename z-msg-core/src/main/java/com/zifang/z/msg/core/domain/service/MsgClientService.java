@@ -1,11 +1,12 @@
 package com.zifang.z.msg.core.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.core.domain.entity.MsgClientDO;
 import com.zifang.z.msg.core.domain.mapper.MsgClientMapper;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
 import java.security.SecureRandom;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -35,6 +36,7 @@ public class MsgClientService {
     /**
      * 创建客户端。返回的 {@link CreatedClient#getPlainKey()} 是明文 AK，只此一次可见。
      */
+    @BizMethod(name = "创建客户端。返回的 CreatedClient#getPlainKey() 是明文 AK，只此一次可见", module = "z-msg", description = "创建客户端。返回的 CreatedClient#getPlainKey() 是明文 AK，只此一次可见。", operation = BizMethod.Operation.CREATE)
     public CreatedClient create(String appCode, String appName, Integer dailyQuota,
                                 String allowedChannels, String ipWhitelist,
                                 LocalDateTime expireTime, String description) {
@@ -63,6 +65,7 @@ public class MsgClientService {
     /**
      * 用明文 AK 找客户端。摘要比对，不是明文比对。
      */
+    @BizMethod(name = "用明文 AK 找客户端。摘要比对，不是明文比对", module = "z-msg", description = "用明文 AK 找客户端。摘要比对，不是明文比对。", operation = BizMethod.Operation.QUERY)
     public MsgClientDO findByPlainKey(String plainKey) {
         if (plainKey == null || plainKey.trim().isEmpty()) {
             return null;
@@ -72,10 +75,12 @@ public class MsgClientService {
         return clientMapper.selectOne(qw);
     }
 
+    @BizMethod(name = "findById", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public MsgClientDO findById(Long id) {
         return id == null ? null : clientMapper.selectById(id);
     }
 
+    @BizMethod(name = "list", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public List<MsgClientDO> list() {
         LambdaQueryWrapper<MsgClientDO> qw = new LambdaQueryWrapper<>();
         qw.orderByDesc(MsgClientDO::getId);
@@ -85,6 +90,7 @@ public class MsgClientService {
     /**
      * 轮换 AK：换一把新的，明文同样只返回一次。旧的立即失效。
      */
+    @BizMethod(name = "轮换 AK：换一把新的，明文同样只返回一次。旧的立即失效", module = "z-msg", description = "轮换 AK：换一把新的，明文同样只返回一次。旧的立即失效。", operation = BizMethod.Operation.ACTION)
     public CreatedClient rotate(Long id) {
         MsgClientDO entity = findById(id);
         if (entity == null) {
@@ -98,6 +104,7 @@ public class MsgClientService {
         return new CreatedClient(entity, plainKey);
     }
 
+    @BizMethod(name = "update", module = "z-msg", description = "", operation = BizMethod.Operation.UPDATE)
     public boolean update(Long id, String appName, Integer dailyQuota, String allowedChannels,
                           String ipWhitelist, LocalDateTime expireTime, String description) {
         MsgClientDO entity = findById(id);
@@ -116,6 +123,7 @@ public class MsgClientService {
         return clientMapper.updateById(entity) > 0;
     }
 
+    @BizMethod(name = "toggle", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public boolean toggle(Long id, boolean enabled) {
         MsgClientDO entity = findById(id);
         if (entity == null) {
@@ -126,6 +134,7 @@ public class MsgClientService {
         return clientMapper.updateById(entity) > 0;
     }
 
+    @BizMethod(name = "delete", module = "z-msg", description = "", operation = BizMethod.Operation.DELETE)
     public boolean delete(Long id) {
         return id != null && clientMapper.deleteById(id) > 0;
     }
@@ -133,6 +142,7 @@ public class MsgClientService {
     /**
      * IP 白名单。空 = 不限。
      */
+    @BizMethod(name = "IP 白名单。空 = 不限", module = "z-msg", description = "IP 白名单。空 = 不限。", operation = BizMethod.Operation.ACTION)
     public boolean verifyIp(MsgClientDO client, String remoteIp) {
         String raw = client == null ? null : client.getIpWhitelist();
         if (raw == null || raw.trim().isEmpty()) {
@@ -153,6 +163,7 @@ public class MsgClientService {
     /**
      * 通道白名单。空 = 全部通道。
      */
+    @BizMethod(name = "通道白名单。空 = 全部通道", module = "z-msg", description = "通道白名单。空 = 全部通道。", operation = BizMethod.Operation.ACTION)
     public boolean verifyChannel(MsgClientDO client, String channel) {
         String raw = client == null ? null : client.getAllowedChannels();
         if (raw == null || raw.trim().isEmpty()) {
@@ -174,6 +185,7 @@ public class MsgClientService {
      *
      * @return true 表示这次还在配额内
      */
+    @BizMethod(name = "记一次配额并判断是否超限。跨天自动把计数清零", module = "z-msg", description = "记一次配额并判断是否超限。跨天自动把计数清零。", operation = BizMethod.Operation.ACTION)
     public boolean consumeQuota(MsgClientDO client) {
         Integer quota = client == null ? null : client.getDailyQuota();
         if (quota == null || quota <= 0) {
@@ -252,3 +264,6 @@ public class MsgClientService {
         }
     }
 }
+
+
+

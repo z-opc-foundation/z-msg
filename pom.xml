@@ -88,6 +88,7 @@
     </modules>
 
     <properties>
+        <z-meta.version>1.0.2</z-meta.version>
         <!-- CI-friendly 版本根 (发版改这一处即可) -->
         <revision>1.2.5</revision>
 
@@ -256,6 +257,11 @@
                     这样写还有个好处：transitive 的 z-util-core 只可能来自这四个模块的声明点
                     （repo1 回读 z-boot-web-starter / z-boot-datasource-starter / z-boot-base 的
                     1.0.17 与 1.0.19 四份 pom，z-util 引用计数均为 0），不存在漏排的路径。 -->
+            <dependency>
+                <groupId>io.github.yuku123</groupId>
+                <artifactId>z-meta-api</artifactId>
+                <version>${z-meta.version}</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
 

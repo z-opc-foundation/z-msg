@@ -1,9 +1,13 @@
 package com.zifang.z.msg.web.api;
 
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.core.domain.entity.MsgClientDO;
 import com.zifang.z.msg.web.annotation.NoLogin;
 import com.zifang.z.msg.web.auth.MsgClientAuthInterceptor;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,7 +16,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.annotation.Resource;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -56,7 +59,8 @@ public class MsgOpenSendController {
      */
     @NoLogin
     @PostMapping("/send")
-    public ResponseEntity<Result<Map<String, Object>>> send(@RequestBody(required = false) MsgSendRequest req,
+    @BizApi(summary = "用客户端 AK 直发一条消息", description = "用客户端 AK 直发一条消息。", tags = { "z-msg" })
+    public ResponseEntity<Result<Map<String, Object>>> send(@RequestBody(required = false) @BizParam(name = "req", type = BizField.FieldType.STRING, description = "请求体（{@code Message} 的直填子集），可空", position = BizParam.Position.BODY) MsgSendRequest req,
                                                              HttpServletRequest request) {
         MsgClientDO client = MsgClientAuthInterceptor.clientOf(request);
         return sender.sendForClient(req, client);
@@ -71,6 +75,7 @@ public class MsgOpenSendController {
      */
     @NoLogin
     @GetMapping("/client/me")
+    @BizApi(summary = "客户端自 introspect：自己是谁、今天还能发几条、能走哪几条通道", description = "客户端自 introspect：自己是谁、今天还能发几条、能走哪几条通道。 为什么不复用 GET /api/msg/channel/list ：那个端点暴露的是本进程的通道接线 （provider 名、是否 mock 兜底、配置里挂了谁），那是运维视图，不该给外部调用方看； 而 AK 客户端真正需要的是「我这份凭据能干什么」，那就是这张自己的单子。", tags = { "z-msg" })
     public ResponseEntity<Result<Map<String, Object>>> me(HttpServletRequest request) {
         MsgClientDO client = MsgClientAuthInterceptor.clientOf(request);
         if (client == null) {
@@ -89,3 +94,6 @@ public class MsgOpenSendController {
         return ResponseEntity.ok(Result.success(data));
     }
 }
+
+
+

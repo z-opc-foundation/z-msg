@@ -2,11 +2,14 @@ package com.zifang.z.msg.web.api;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.core.domain.entity.MsgTemplateDO;
 import com.zifang.z.msg.core.domain.service.MsgTemplateService;
+import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.*;
 
-import jakarta.annotation.Resource;
 import java.util.Map;
 
 /**
@@ -32,7 +35,8 @@ public class MsgTemplateController {
     private com.zifang.z.msg.core.template.MessageTemplateEngine templateEngine;
 
     @PostMapping("/list")
-    public Result<IPage<MsgTemplateDO>> list(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "list", description = "", tags = { "z-msg" })
+    public Result<IPage<MsgTemplateDO>> list(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         int page = body.containsKey("page") ? ((Number) body.get("page")).intValue() : 1;
         int size = body.containsKey("size") ? ((Number) body.get("size")).intValue() : 20;
         String bizType = (String) body.getOrDefault("bizType", "");
@@ -41,46 +45,61 @@ public class MsgTemplateController {
     }
 
     @GetMapping("/{id}")
-    public Result<MsgTemplateDO> getById(@PathVariable Long id) {
+    @BizApi(summary = "getById", description = "", tags = { "z-msg" })
+    public Result<MsgTemplateDO> getById(@PathVariable @BizParam(name = "id", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.PATH) Long id) {
         MsgTemplateDO t = templateService.getById(id);
         return t != null ? Result.success(t) : Result.<MsgTemplateDO>fail("模板不存在");
     }
 
     @PostMapping
-    public Result<MsgTemplateDO> create(@RequestBody MsgTemplateDO t) {
+    @BizApi(summary = "create", description = "", tags = { "z-msg" })
+    public Result<MsgTemplateDO> create(@RequestBody @BizParam(name = "t", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) MsgTemplateDO t) {
         return Result.success(templateService.create(t));
     }
 
     @PutMapping("/{id}")
-    public Result<MsgTemplateDO> update(@PathVariable Long id,
-                                        @RequestBody MsgTemplateDO t,
-                                        @RequestParam(required = false, defaultValue = "") String changeNote) {
+    @BizApi(summary = "update", description = "", tags = { "z-msg" })
+    public Result<MsgTemplateDO> update(@PathVariable @BizParam(name = "id", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.PATH) Long id,
+                                        @RequestBody @BizParam(name = "t", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.BODY) MsgTemplateDO t,
+                                        @RequestParam(required = false, defaultValue = "")
+                                        @BizParam(name = "changeNote", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String changeNote) {
         String operator = "system";
         return Result.success(templateService.update(id, t, changeNote, operator));
     }
 
     @DeleteMapping("/{id}")
-    public Result<Boolean> delete(@PathVariable Long id) {
+    @BizApi(summary = "delete", description = "", tags = { "z-msg" })
+    public Result<Boolean> delete(@PathVariable @BizParam(name = "id", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.PATH) Long id) {
         return Result.success(templateService.delete(id));
     }
 
     @PostMapping("/{id}/approve")
-    public Result<MsgTemplateDO> approve(@PathVariable Long id,
-                                         @RequestParam(required = false, defaultValue = "system") String approver,
-                                         @RequestParam(required = false, defaultValue = "") String remark) {
+    @BizApi(summary = "approve", description = "", tags = { "z-msg" })
+    public Result<MsgTemplateDO> approve(@PathVariable @BizParam(name = "id", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.PATH) Long id,
+                                         @RequestParam(required = false, defaultValue = "system")
+                                         @BizParam(name = "approver", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String approver,
+                                         @RequestParam(required = false, defaultValue = "")
+                                         @BizParam(name = "remark", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String remark) {
         return Result.success(templateService.approve(id, approver, remark));
     }
 
     @PostMapping("/{id}/reject")
-    public Result<MsgTemplateDO> reject(@PathVariable Long id,
-                                        @RequestParam(required = false, defaultValue = "system") String approver,
-                                        @RequestParam(required = false, defaultValue = "") String reason) {
+    @BizApi(summary = "reject", description = "", tags = { "z-msg" })
+    public Result<MsgTemplateDO> reject(@PathVariable @BizParam(name = "id", type = BizField.FieldType.INTEGER, description = "", position = BizParam.Position.PATH) Long id,
+                                        @RequestParam(required = false, defaultValue = "system")
+                                        @BizParam(name = "approver", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String approver,
+                                        @RequestParam(required = false, defaultValue = "")
+                                        @BizParam(name = "reason", type = BizField.FieldType.STRING, description = "", position = BizParam.Position.QUERY) String reason) {
         return Result.success(templateService.reject(id, approver, reason));
     }
 
     @PostMapping("/cache/refresh")
+    @BizApi(summary = "refreshCache", description = "", tags = { "z-msg" })
     public Result<String> refreshCache() {
         templateEngine.refreshCache();
         return Result.success("模板缓存已刷新");
     }
 }
+
+
+

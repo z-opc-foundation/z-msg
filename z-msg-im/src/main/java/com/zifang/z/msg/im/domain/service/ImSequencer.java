@@ -1,14 +1,14 @@
 package com.zifang.z.msg.im.domain.service;
 
 import com.baomidou.mybatisplus.core.toolkit.IdWorker;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.im.config.ImProperties;
 import com.zifang.z.msg.im.domain.entity.ImConversationDO;
 import com.zifang.z.msg.im.domain.mapper.ImConversationMapper;
+import jakarta.annotation.Resource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.stereotype.Service;
-
-import jakarta.annotation.Resource;
 
 /**
  * 会话内 seq 分配器：单点负责"严格单调递增、不重号"这条契约。
@@ -49,6 +49,7 @@ public class ImSequencer {
      * @param preview      会话列表摘要
      * @return 分配到的 seq，会话内从 1 开始严格递增
      */
+    @BizMethod(name = "占一个号，并把\"会话的最后一条消息是谁\"一并落下去", module = "z-msg", description = "占一个号，并把\"会话的最后一条消息是谁\"一并落下去。", operation = BizMethod.Operation.ACTION)
     public long append(ImConversationDO conversation, long msgId, String preview) {
         if (conversation == null || conversation.getId() == null) {
             throw new IllegalArgumentException("conversation 不能为空");
@@ -80,6 +81,7 @@ public class ImSequencer {
      * 先把 id 拿到手，才能在占号的那一条 UPDATE 里把 {@code last_msg_id} 写对。
      * 用 MP 的雪花发生器，和 {@code @TableId(type = IdType.ASSIGN_ID)} 是同一个源。
      */
+    @BizMethod(name = "先把 id 拿到手，才能在占号的那一条 UPDATE 里把 last_msg_id 写对", module = "z-msg", description = "先把 id 拿到手，才能在占号的那一条 UPDATE 里把 last_msg_id 写对。 用 MP 的雪花发生器，和 @TableId(type = IdType.ASSIGN_ID) 是同一个源。", operation = BizMethod.Operation.CREATE)
     public long newMessageId() {
         return IdWorker.getId();
     }
@@ -95,3 +97,6 @@ public class ImSequencer {
         }
     }
 }
+
+
+

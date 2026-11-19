@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.im.config.ImProperties;
 import com.zifang.z.msg.im.domain.entity.ImConversationDO;
 import com.zifang.z.msg.im.domain.entity.ImMemberDO;
@@ -15,12 +16,12 @@ import com.zifang.z.msg.im.domain.model.ImForbiddenException;
 import com.zifang.z.msg.im.domain.model.ImNotFoundException;
 import com.zifang.z.msg.im.domain.model.ImRoles;
 import com.zifang.z.msg.im.domain.model.ImUnread;
+import jakarta.annotation.Resource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -61,6 +62,7 @@ public class ImConversationService {
      * @param me   发起方（登录身份）
      * @param peer 对端
      */
+    @BizMethod(name = "单聊 create-or-get：同一对用户永远只有这一个会话，靠 uk_pair 保证", module = "z-msg", description = "单聊 create-or-get：同一对用户永远只有这一个会话，靠 uk_pair 保证。", operation = BizMethod.Operation.ACTION)
     public ImConversationDO single(Long me, Long peer, String tenantCode) {
         if (me == null || peer == null) {
             throw new IllegalArgumentException("单聊需要两个 userId");
@@ -112,6 +114,7 @@ public class ImConversationService {
      *
      * @param convType {@link ImConvTypes#GROUP} 或 {@link ImConvTypes#ROOM}
      */
+    @BizMethod(name = "建群聊 / 聊天室。owner 一定进成员表并且角色是 OWNER", module = "z-msg", description = "建群聊 / 聊天室。owner 一定进成员表并且角色是 OWNER。", operation = BizMethod.Operation.CREATE)
     public ImConversationDO createGroup(Long owner, List<Long> memberUserIds, String title,
                                         String avatar, String tenantCode, String convType) {
         String type = ImConvTypes.normalize(convType);
@@ -155,6 +158,7 @@ public class ImConversationService {
      * 我的会话列表（分页）。返回行里带 {@code lastMsgSeq} / {@code lastMsgPreview} /
      * {@code memberCount} 与本人游标，未读数在库里已经算好，客户端不必再拉一遍消息表。
      */
+    @BizMethod(name = "我的会话列表（分页）。返回行里带 lastMsgSeq / lastMsgPreview /", module = "z-msg", description = "我的会话列表（分页）。返回行里带 lastMsgSeq / lastMsgPreview / memberCount 与本人游标，未读数在库里已经算好，客户端不必再拉一遍消息表。", operation = BizMethod.Operation.QUERY)
     public IPage<ImConversationView> pageMine(Long me, int page, int size) {
         if (me == null) {
             throw new IllegalArgumentException("缺少调用者身份");
@@ -174,6 +178,7 @@ public class ImConversationService {
      * 我的全部会话（不分页）：未读汇总用。上限就是 {@code z-msg.im.max-page-size}，
      * 一次拉完比让客户端翻页算总数诚实。
      */
+    @BizMethod(name = "我的全部会话（不分页）：未读汇总用。上限就是 z-msg.im.max-page-size", module = "z-msg", description = "我的全部会话（不分页）：未读汇总用。上限就是 z-msg.im.max-page-size， 一次拉完比让客户端翻页算总数诚实。", operation = BizMethod.Operation.QUERY)
     public List<ImConversationView> listMine(Long me) {
         if (me == null) {
             throw new IllegalArgumentException("缺少调用者身份");
@@ -195,6 +200,7 @@ public class ImConversationService {
     /**
      * 成员列表。只有成员能看，且看不到别人的会话。
      */
+    @BizMethod(name = "成员列表。只有成员能看，且看不到别人的会话", module = "z-msg", description = "成员列表。只有成员能看，且看不到别人的会话。", operation = BizMethod.Operation.ACTION)
     public List<ImMemberDO> members(Long me, Long conversationId) {
         requireMember(conversationId, me);
         LambdaQueryWrapper<ImMemberDO> qw = new LambdaQueryWrapper<ImMemberDO>();
@@ -203,6 +209,7 @@ public class ImConversationService {
         return rows == null ? Collections.<ImMemberDO>emptyList() : rows;
     }
 
+    @BizMethod(name = "requireConversation", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public ImConversationDO requireConversation(Long conversationId) {
         if (conversationId == null) {
             throw new IllegalArgumentException("conversationId 不能为空");
@@ -217,6 +224,7 @@ public class ImConversationService {
     /**
      * 成员判定。<b>不存在</b>与<b>不是成员</b>回同一句话，不给拿错误码枚举会话 id 的 oracle。
      */
+    @BizMethod(name = "成员判定。<b>不存在</b>与<b>不是成员</b>回同一句话，不给拿错误码枚举会话 id 的 oracle", module = "z-msg", description = "成员判定。 不存在 与 不是成员 回同一句话，不给拿错误码枚举会话 id 的 oracle。", operation = BizMethod.Operation.ACTION)
     public ImMemberDO requireMember(Long conversationId, Long userId) {
         if (userId == null) {
             throw new ImForbiddenException("缺少调用者身份");
@@ -228,6 +236,7 @@ public class ImConversationService {
         return member;
     }
 
+    @BizMethod(name = "isMember", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public boolean isMember(Long conversationId, Long userId) {
         return conversationId != null && userId != null && findMember(conversationId, userId) != null;
     }
@@ -235,6 +244,7 @@ public class ImConversationService {
     /**
      * 会话是否存在（授权策略用它区分"这条 room 不是我管的"与"是我的但你不是成员"）。
      */
+    @BizMethod(name = "会话是否存在（授权策略用它区分\"这条 room 不是我管的\"与\"是我的但你不是成员\"）", module = "z-msg", description = "会话是否存在（授权策略用它区分\"这条 room 不是我管的\"与\"是我的但你不是成员\"）。", operation = BizMethod.Operation.ACTION)
     public boolean conversationExists(Long conversationId) {
         if (conversationId == null) {
             return false;
@@ -249,6 +259,7 @@ public class ImConversationService {
      * 加人。只有 OWNER/ADMIN 可以；重复加同一个人在 {@code uk_im_member_conv_user} 上
      * 命中即视为成功（幂等），不报错。
      */
+    @BizMethod(name = "加人。只有 OWNER/ADMIN 可以；重复加同一个人在 uk_im_member_conv_user 上", module = "z-msg", description = "加人。只有 OWNER/ADMIN 可以；重复加同一个人在 uk_im_member_conv_user 上 命中即视为成功（幂等），不报错。", operation = BizMethod.Operation.CREATE)
     public List<ImMemberDO> addMembers(Long operator, Long conversationId, List<Long> userIds) {
         requireManager(conversationId, operator);
         List<Long> ids = ImRoles.distinct(userIds);
@@ -275,6 +286,7 @@ public class ImConversationService {
      * 踢人。OWNER 不能被踢；管理员也不能把自己踢成最后一个 owner。
      * 退群只删成员行，消息与回执都留着（回执是"他读过"这段事实，不随人消失）。
      */
+    @BizMethod(name = "踢人。OWNER 不能被踢；管理员也不能把自己踢成最后一个 owner", module = "z-msg", description = "踢人。OWNER 不能被踢；管理员也不能把自己踢成最后一个 owner。 退群只删成员行，消息与回执都留着（回执是\"他读过\"这段事实，不随人消失）。", operation = BizMethod.Operation.DELETE)
     public int removeMembers(Long operator, Long conversationId, List<Long> userIds) {
         requireManager(conversationId, operator);
         List<Long> ids = ImRoles.distinct(userIds);
@@ -303,6 +315,7 @@ public class ImConversationService {
     /**
      * 自己退群。不需要管理员权限，但 owner 要先转让（避免留下没有 owner 的群）。
      */
+    @BizMethod(name = "自己退群。不需要管理员权限，但 owner 要先转让（避免留下没有 owner 的群）", module = "z-msg", description = "自己退群。不需要管理员权限，但 owner 要先转让（避免留下没有 owner 的群）。", operation = BizMethod.Operation.ACTION)
     public boolean leave(Long userId, Long conversationId) {
         ImMemberDO me = requireMember(conversationId, userId);
         if (ImRoles.OWNER.equals(me.getRole())) {
@@ -320,6 +333,7 @@ public class ImConversationService {
     /**
      * 改角色。只有 OWNER 能改（含转让群主）；目标必须是本会话成员。
      */
+    @BizMethod(name = "改角色。只有 OWNER 能改（含转让群主）；目标必须是本会话成员", module = "z-msg", description = "改角色。只有 OWNER 能改（含转让群主）；目标必须是本会话成员。", operation = BizMethod.Operation.UPDATE)
     public ImMemberDO setRole(Long operator, Long conversationId, Long targetUserId, String role) {
         ImMemberDO by = requireMember(conversationId, operator);
         if (!ImRoles.OWNER.equals(by.getRole())) {
@@ -358,6 +372,7 @@ public class ImConversationService {
     /**
      * 免打扰开关。仍然计未读，只是不弹 —— 与 {@code z_msg_im_member.muted} 的注释一致。
      */
+    @BizMethod(name = "免打扰开关。仍然计未读，只是不弹 —— 与 z_msg_im_member.muted 的注释一致", module = "z-msg", description = "免打扰开关。仍然计未读，只是不弹 —— 与 z_msg_im_member.muted 的注释一致。", operation = BizMethod.Operation.ACTION)
     public boolean mute(Long userId, Long conversationId, boolean muted) {
         requireMember(conversationId, userId);
         LambdaUpdateWrapper<ImMemberDO> qw = new LambdaUpdateWrapper<ImMemberDO>();
@@ -369,6 +384,7 @@ public class ImConversationService {
 
     // ---------------------------------------------------------------- 内部工具
 
+    @BizMethod(name = "findMember", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public ImMemberDO findMember(Long conversationId, Long userId) {
         if (conversationId == null || userId == null) {
             return null;
@@ -433,3 +449,6 @@ public class ImConversationService {
         return Math.min(s, Math.max(1, properties.getMaxPageSize()));
     }
 }
+
+
+

@@ -1,7 +1,11 @@
 package com.zifang.z.msg.web.api;
 
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.api.MessageGateway;
+import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -9,7 +13,6 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.annotation.Resource;
 import java.util.Map;
 
 /**
@@ -78,8 +81,12 @@ public class MsgSendController {
      * @return 成功时 {@code data} 里带 {@code msgId}；失败时是带人话的 4xx/5xx
      */
     @PostMapping("/send")
-    public ResponseEntity<Result<Map<String, Object>>> send(@RequestBody(required = false) MsgSendRequest req,
+    @BizApi(summary = "直发一条消息", description = "直发一条消息。", tags = { "z-msg" })
+    public ResponseEntity<Result<Map<String, Object>>> send(@RequestBody(required = false) @BizParam(name = "req", type = BizField.FieldType.STRING, description = "请求体（{@code Message} 的直填子集），可空", position = BizParam.Position.BODY) MsgSendRequest req,
                                                              HttpServletRequest request) {
         return sender.sendForPlatform(req, request);
     }
 }
+
+
+

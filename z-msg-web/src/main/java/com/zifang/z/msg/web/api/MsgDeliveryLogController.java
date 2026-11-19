@@ -2,14 +2,17 @@ package com.zifang.z.msg.web.api;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.core.domain.entity.MsgDeliveryLogDO;
 import com.zifang.z.msg.core.domain.service.MsgDeliveryLogService;
+import jakarta.annotation.Resource;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.annotation.Resource;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,7 +30,8 @@ public class MsgDeliveryLogController {
     private MsgDeliveryLogService deliveryLogService;
 
     @PostMapping("/list")
-    public Result<IPage<MsgDeliveryLogDO>> list(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "list", description = "", tags = { "z-msg" })
+    public Result<IPage<MsgDeliveryLogDO>> list(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         int page = body.containsKey("page") ? ((Number) body.get("page")).intValue() : 1;
         int size = body.containsKey("size") ? ((Number) body.get("size")).intValue() : 20;
         String bizType = (String) body.getOrDefault("bizType", "");
@@ -38,7 +42,8 @@ public class MsgDeliveryLogController {
     }
 
     @PostMapping("/stats")
-    public Result<Map<String, Long>> stats(@RequestBody Map<String, Object> body) {
+    @BizApi(summary = "stats", description = "", tags = { "z-msg" })
+    public Result<Map<String, Long>> stats(@RequestBody @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         String channel = (String) body.getOrDefault("channel", "");
         Map<String, Long> stats = new HashMap<>();
         stats.put("success", deliveryLogService.countSuccess(null, null, channel));
@@ -47,3 +52,6 @@ public class MsgDeliveryLogController {
         return Result.success(stats);
     }
 }
+
+
+

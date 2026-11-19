@@ -2,6 +2,7 @@ package com.zifang.z.msg.im.domain.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.api.RealtimeMessage;
 import com.zifang.z.msg.api.RealtimePublisher;
 import com.zifang.z.msg.api.RealtimeTopics;
@@ -14,13 +15,13 @@ import com.zifang.z.msg.im.domain.mapper.ImMessageMapper;
 import com.zifang.z.msg.im.domain.model.ImConvTypes;
 import com.zifang.z.msg.im.domain.model.ImHistoryPage;
 import com.zifang.z.msg.im.domain.model.ImRoles;
+import jakarta.annotation.Resource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -84,6 +85,7 @@ public class ImMessageService {
 
     // ---------------------------------------------------------------- 发消息
 
+    @BizMethod(name = "send", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public ImMessageDO send(Long conversationId, Long senderUserId, String content) {
         return send(conversationId, senderUserId, "TEXT", content, null, null, null);
     }
@@ -102,6 +104,7 @@ public class ImMessageService {
      * @param replyToSeq     引用哪条消息的 seq，可空
      * @return 落库后的消息行（幂等重发时返回的就是那已有的一条，seq 不变）
      */
+    @BizMethod(name = "发消息", module = "z-msg", description = "发消息。 MsgPrincipalResolver#require 的结果） 本模块不做任何媒体处理", operation = BizMethod.Operation.ACTION)
     public ImMessageDO send(Long conversationId, Long senderUserId, String msgType, String content,
                             String clientMsgId, List<Long> atUserIds, Long replyToSeq) {
         conversationService.requireMember(conversationId, senderUserId);
@@ -172,6 +175,7 @@ public class ImMessageService {
      *
      * @param sinceSeq 客户端手里的水位，负数按 0 处理
      */
+    @BizMethod(name = "增量拉历史，带同步判定量（契约见 ImHistoryPage）", module = "z-msg", description = "增量拉历史，带同步判定量（契约见 ImHistoryPage）。 下限取 cleared_seq 是\"清空聊天记录\"的实现方式 —— 只把自己的可见游标推上去， 不删任何消息行 ：别人的历史还在，将来加回来的成员也能看到完整上下文。 hasMore 是靠\"多读一条\"探出来的，不是拿 rows.size() 和请求的 size 比： 请求的 size 会被 max-page-size 夹掉，比出来的结果在夹了的那一档上永远是对不了的。", operation = BizMethod.Operation.ACTION)
     public ImHistoryPage historyPage(Long conversationId, Long me, long sinceSeq, int size) {
         ImMemberDO member = conversationService.requireMember(conversationId, me);
         long floor = Math.max(sinceSeq < 0 ? 0L : sinceSeq,
@@ -206,6 +210,7 @@ public class ImMessageService {
      * 是 1.1.0 发布件里的公开 service API，宿主可能已经在用；判定量只有服务端给得出来，
      * 所以新代码请直接用 {@code historyPage}。
      */
+    @BizMethod(name = "只要消息本身：就是 #historyPage 的 rows，同一个查询、同一套可见性口径", module = "z-msg", description = "只要消息本身：就是 #historyPage 的 rows，同一个查询、同一套可见性口径， 两条口子不会漂。 本仓库的 main 里已经没有调用方（controller 走 historyPage）。留着它是因为这个签名 是 1.1.0 发布件里的公开 service API，宿主可能已经在用；判定量只有服务端给得出来， 所以新代码请直接用 historyPage。", operation = BizMethod.Operation.ACTION)
     public List<ImMessageDO> history(Long conversationId, Long me, long sinceSeq, int size) {
         return historyPage(conversationId, me, sinceSeq, size).getRows();
     }
@@ -213,6 +218,7 @@ public class ImMessageService {
     /**
      * 按 seq 取一条（客户端点"回复"气泡时反查原文）。
      */
+    @BizMethod(name = "按 seq 取一条（客户端点\"回复\"气泡时反查原文）", module = "z-msg", description = "按 seq 取一条（客户端点\"回复\"气泡时反查原文）。", operation = BizMethod.Operation.ACTION)
     public ImMessageDO bySeq(Long conversationId, Long me, long seq) {
         conversationService.requireMember(conversationId, me);
         LambdaQueryWrapper<ImMessageDO> qw = new LambdaQueryWrapper<ImMessageDO>();
@@ -230,6 +236,7 @@ public class ImMessageService {
      * 清空会话：把本人的 {@code cleared_seq} 推到会话当前水位。返回推到的位置。
      * 只前进不回退，且不动 {@code last_read_seq}（未读数因此保持 0，清空不会"凭空多出未读"）。
      */
+    @BizMethod(name = "清空会话：把本人的 cleared_seq 推到会话当前水位。返回推到的位置", module = "z-msg", description = "清空会话：把本人的 cleared_seq 推到会话当前水位。返回推到的位置。 只前进不回退，且不动 last_read_seq（未读数因此保持 0，清空不会\"凭空多出未读\"）。", operation = BizMethod.Operation.DELETE)
     public long clear(Long conversationId, Long me) {
         conversationService.requireMember(conversationId, me);
         ImConversationDO conv = conversationService.requireConversation(conversationId);
@@ -248,6 +255,7 @@ public class ImMessageService {
      * 客户端订上 {@code room:} 之前先读一次它，之后按 {@code seq > head} 的帧增量接，
      * 不必为了补"订阅前那几帧"去拉一次全量历史。
      */
+    @BizMethod(name = "会话当前水位（last_msg_seq）。成员才拿得到", module = "z-msg", description = "会话当前水位（last_msg_seq）。成员才拿得到。 客户端订上 room: 之前先读一次它，之后按 seq > head 的帧增量接， 不必为了补\"订阅前那几帧\"去拉一次全量历史。", operation = BizMethod.Operation.ACTION)
     public long headSeq(Long conversationId, Long me) {
         conversationService.requireMember(conversationId, me);
         ImConversationDO conv = conversationService.requireConversation(conversationId);
@@ -413,6 +421,7 @@ public class ImMessageService {
      * 会话列表用的摘要：非文本消息只放一个占位标签，长文本截到
      * {@code z_msg_im_conversation.last_msg_preview} 放得下的长度。
      */
+    @BizMethod(name = "会话列表用的摘要：非文本消息只放一个占位标签，长文本截到", module = "z-msg", description = "会话列表用的摘要：非文本消息只放一个占位标签，长文本截到 z_msg_im_conversation.last_msg_preview 放得下的长度。", operation = BizMethod.Operation.ACTION)
     public String previewOf(String msgType, String content) {
         String text;
         if ("IMAGE".equals(msgType)) {
@@ -467,3 +476,6 @@ public class ImMessageService {
         return Math.min(s, Math.max(1, properties.getMaxPageSize()));
     }
 }
+
+
+

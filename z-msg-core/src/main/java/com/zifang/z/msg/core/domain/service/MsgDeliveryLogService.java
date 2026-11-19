@@ -3,11 +3,12 @@ package com.zifang.z.msg.core.domain.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.core.domain.entity.MsgDeliveryLogDO;
 import com.zifang.z.msg.core.domain.mapper.MsgDeliveryLogMapper;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 
 /**
@@ -19,6 +20,7 @@ public class MsgDeliveryLogService {
     @Resource
     private MsgDeliveryLogMapper mapper;
 
+    @BizMethod(name = "page", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public IPage<MsgDeliveryLogDO> page(int pageNum, int pageSize,
                                         String bizType, String channel, Integer status, Long userId) {
         LambdaQueryWrapper<MsgDeliveryLogDO> qw = new LambdaQueryWrapper<>();
@@ -38,6 +40,7 @@ public class MsgDeliveryLogService {
         return mapper.selectPage(new Page<>(pageNum, pageSize), qw);
     }
 
+    @BizMethod(name = "countSuccess", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public Long countSuccess(LocalDateTime from, LocalDateTime to, String channel) {
         LambdaQueryWrapper<MsgDeliveryLogDO> qw = new LambdaQueryWrapper<>();
         qw.eq(MsgDeliveryLogDO::getStatus, 1);
@@ -53,6 +56,7 @@ public class MsgDeliveryLogService {
         return mapper.selectCount(qw);
     }
 
+    @BizMethod(name = "countFailed", module = "z-msg", description = "", operation = BizMethod.Operation.QUERY)
     public Long countFailed(LocalDateTime from, LocalDateTime to, String channel) {
         LambdaQueryWrapper<MsgDeliveryLogDO> qw = new LambdaQueryWrapper<>();
         qw.eq(MsgDeliveryLogDO::getStatus, 2);
@@ -68,3 +72,6 @@ public class MsgDeliveryLogService {
         return mapper.selectCount(qw);
     }
 }
+
+
+

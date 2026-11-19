@@ -1,16 +1,19 @@
 package com.zifang.z.msg.im.api;
 
 import com.zifang.util.core.meta.Result;
+import com.zifang.z.meta.api.annotation.BizApi;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizParam;
 import com.zifang.z.msg.im.domain.entity.ImReadReceiptDO;
 import com.zifang.z.msg.im.domain.service.ImReadService;
 import com.zifang.z.msg.web.auth.MsgPrincipalResolver;
+import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import jakarta.annotation.Resource;
-import jakarta.servlet.http.HttpServletRequest;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,8 +39,10 @@ public class ImReadController {
      * 标已读。不传 {@code lastReadSeq} 就是"读到会话最新"。
      */
     @PostMapping("/mark")
+    @BizApi(summary = "标已读。不传 lastReadSeq 就是\"读到会话最新\"", description = "标已读。不传 lastReadSeq 就是\"读到会话最新\"。", tags = { "z-msg" })
     public Result<Map<String, Object>> mark(HttpServletRequest request,
-                                            @RequestBody(required = false) Map<String, Object> body) {
+                                            @RequestBody(required = false)
+                                            @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         Long me = principalResolver.require(request);
         Map<String, Object> b = ImApiSupport.requireBody(body);
         long upto = ImApiSupport.numberWithDefault(b, "lastReadSeq", Long.MAX_VALUE);
@@ -52,8 +57,10 @@ public class ImReadController {
      * 一个会话的未读数。
      */
     @PostMapping("/unread")
+    @BizApi(summary = "一个会话的未读数", description = "一个会话的未读数。", tags = { "z-msg" })
     public Result<Long> unread(HttpServletRequest request,
-                               @RequestBody(required = false) Map<String, Object> body) {
+                               @RequestBody(required = false)
+                               @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         Long me = principalResolver.require(request);
         return Result.success(readService.unread(
                 ImApiSupport.id(ImApiSupport.requireBody(body), "conversationId"), me));
@@ -64,8 +71,10 @@ public class ImReadController {
      */
     @PostMapping("/summary")
     @SuppressWarnings("unchecked")
+    @BizApi(summary = "未读汇总：每个会话一条 + 总数。前端红点只需要一次调用", description = "未读汇总：每个会话一条 + 总数。前端红点只需要一次调用。", tags = { "z-msg" })
     public Result<Map<String, Object>> summary(HttpServletRequest request,
-                                              @RequestBody(required = false) Map<String, Object> body) {
+                                              @RequestBody(required = false)
+                                              @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         Long me = principalResolver.require(request);
         return Result.success(readService.unreadSummary(me));
     }
@@ -75,10 +84,15 @@ public class ImReadController {
      * 不能拿一个会话 id 就来枚举别人的阅读进度。
      */
     @PostMapping("/receipts")
+    @BizApi(summary = "\"谁读到哪\"。只有同会话成员读得到——已读状态本身是社交信息", description = "\"谁读到哪\"。只有同会话成员读得到——已读状态本身是社交信息， 不能拿一个会话 id 就来枚举别人的阅读进度。", tags = { "z-msg" })
     public Result<List<ImReadReceiptDO>> receipts(HttpServletRequest request,
-                                                 @RequestBody(required = false) Map<String, Object> body) {
+                                                 @RequestBody(required = false)
+                                                 @BizParam(name = "body", type = BizField.FieldType.JSON, description = "", position = BizParam.Position.BODY) Map<String, Object> body) {
         Long me = principalResolver.require(request);
         return Result.success(readService.receipts(
                 ImApiSupport.id(ImApiSupport.requireBody(body), "conversationId"), me));
     }
 }
+
+
+

@@ -3,6 +3,8 @@ package com.zifang.z.msg.core.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizModel;
 
 import java.time.LocalDateTime;
 
@@ -11,17 +13,26 @@ import java.time.LocalDateTime;
  * <p>
  * Phase 3 引入:每次 z_msg_template.content 修改,append 一行 (用于回滚 / 审计)。
  */
+@BizModel(name = "模板历史版本 DO", module = "z-msg", description = "模板历史版本 DO Phase 3 引入:每次 z_msg_template.content 修改,append 一行 (用于回滚 / 审计)。")
 @TableName("z_msg_template_version")
 public class MsgTemplateVersionDO {
 
     @TableId(type = IdType.AUTO)
+    @BizField(name = "id", type = BizField.FieldType.INTEGER)
     private Long id;
+    @BizField(name = "templateId", type = BizField.FieldType.INTEGER)
     private Long templateId;
+    @BizField(name = "version", type = BizField.FieldType.INTEGER)
     private Integer version;
+    @BizField(name = "subject", type = BizField.FieldType.STRING)
     private String subject;
+    @BizField(name = "content", type = BizField.FieldType.STRING)
     private String content;
+    @BizField(name = "changeNote", type = BizField.FieldType.STRING)
     private String changeNote;
+    @BizField(name = "createdTime", type = BizField.FieldType.DATETIME)
     private LocalDateTime createdTime;
+    @BizField(name = "createdBy", type = BizField.FieldType.STRING)
     private String createdBy;
 
     public Long getId() {
@@ -88,3 +99,6 @@ public class MsgTemplateVersionDO {
         this.createdBy = createdBy;
     }
 }
+
+
+

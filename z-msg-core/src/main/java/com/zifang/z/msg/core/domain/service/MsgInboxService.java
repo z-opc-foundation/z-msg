@@ -4,12 +4,13 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.zifang.z.meta.api.annotation.BizMethod;
 import com.zifang.z.msg.core.config.MessageProperties;
 import com.zifang.z.msg.core.domain.entity.InAppMessage;
 import com.zifang.z.msg.core.domain.mapper.InAppMessageMapper;
+import jakarta.annotation.Resource;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.Resource;
 import java.time.LocalDateTime;
 
 /**
@@ -39,6 +40,7 @@ public class MsgInboxService {
      * @param unreadOnly 可空；true 只看未读
      * @param msgType    可空；按消息类型过滤
      */
+    @BizMethod(name = "我的收件箱分页。置顶优先，其次时间倒序", module = "z-msg", description = "我的收件箱分页。置顶优先，其次时间倒序。", operation = BizMethod.Operation.QUERY)
     public IPage<InAppMessage> pageMine(Long userId, int pageNum, int size,
                                         Boolean unreadOnly, String msgType) {
         if (userId == null) {
@@ -68,6 +70,7 @@ public class MsgInboxService {
     /**
      * 未读数，口径与列表一致：过期与已删的不计入红点。
      */
+    @BizMethod(name = "未读数，口径与列表一致：过期与已删的不计入红点", module = "z-msg", description = "未读数，口径与列表一致：过期与已删的不计入红点。", operation = BizMethod.Operation.ACTION)
     public long unreadCount(Long userId) {
         if (userId == null) {
             return 0L;
@@ -84,6 +87,7 @@ public class MsgInboxService {
      *
      * @return true 只有"这条确实是你的、且之前未读"才成立
      */
+    @BizMethod(name = "标记已读", module = "z-msg", description = "标记已读。", operation = BizMethod.Operation.ACTION)
     public boolean markRead(Long userId, Long messageId) {
         if (userId == null || messageId == null) {
             return false;
@@ -97,6 +101,7 @@ public class MsgInboxService {
         return mapper.update(null, uw) > 0;
     }
 
+    @BizMethod(name = "markAllRead", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public int markAllRead(Long userId) {
         if (userId == null) {
             return 0;
@@ -112,6 +117,7 @@ public class MsgInboxService {
     /**
      * 软删一条。别人的 id 传进来得到 false，而不是把别人的消息删掉。
      */
+    @BizMethod(name = "软删一条。别人的 id 传进来得到 false，而不是把别人的消息删掉", module = "z-msg", description = "软删一条。别人的 id 传进来得到 false，而不是把别人的消息删掉。", operation = BizMethod.Operation.ACTION)
     public boolean softDelete(Long userId, Long messageId) {
         if (userId == null || messageId == null) {
             return false;
@@ -127,6 +133,7 @@ public class MsgInboxService {
     /**
      * 清空"我的"收件箱（软删）。返回被标记的条数。
      */
+    @BizMethod(name = "清空\"我的\"收件箱（软删）。返回被标记的条数", module = "z-msg", description = "清空\"我的\"收件箱（软删）。返回被标记的条数。", operation = BizMethod.Operation.ACTION)
     public int softDeleteAll(Long userId, boolean onlyRead) {
         if (userId == null) {
             return 0;
@@ -144,6 +151,7 @@ public class MsgInboxService {
     /**
      * @return 属于该用户时返回完整行（含正文）；否则 null —— 越权与不存在不可区分，避免探测
      */
+    @BizMethod(name = "detail", module = "z-msg", description = "", operation = BizMethod.Operation.ACTION)
     public InAppMessage detail(Long userId, Long messageId) {
         if (userId == null || messageId == null) {
             return null;
@@ -173,3 +181,6 @@ public class MsgInboxService {
         return Math.min(Math.max(1, n), Math.max(1, max));
     }
 }
+
+
+

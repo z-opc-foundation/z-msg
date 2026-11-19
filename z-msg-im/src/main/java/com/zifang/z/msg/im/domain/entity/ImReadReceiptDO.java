@@ -3,6 +3,8 @@ package com.zifang.z.msg.im.domain.entity;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.zifang.z.meta.api.annotation.BizField;
+import com.zifang.z.meta.api.annotation.BizModel;
 
 import java.time.LocalDateTime;
 
@@ -17,22 +19,29 @@ import java.time.LocalDateTime;
  * {@code (conversation_id, user_id)} 上的 {@code uk_im_receipt_conv_user} 是幂等的来源：
  * 标已读是高频重复动作，这里一行一人，靠 upsert 而不是 insert。
  */
+@BizModel(name = "IM 已读回执 DO（z_msg_im_read_receipt）", module = "z-msg", description = "IM 已读回执 DO（z_msg_im_read_receipt） 与 ImMemberDO#getLastReadSeq() 是同一件事的两个视角：成员行上的游标是 \"我自己读到哪\"（未读数由它算，写路径只碰一行），这张表是\"给群里别人看的展示态\" ——谁读到哪。之所以单独一张表而不是从成员表查：成员行会随退群删掉， 而回执是已经发生过的事实，不能因为人走了就把\"他读过\"这段历史一起消失。 (conversation_id, user_id) 上的 uk_im_receipt_conv_user 是幂等的来源： 标已读是高频重复动作，这里一行一人，靠 upsert 而不是 insert。")
 @TableName("z_msg_im_read_receipt")
 public class ImReadReceiptDO {
 
     @TableId(type = IdType.ASSIGN_ID)
+    @BizField(name = "雪花 id", type = BizField.FieldType.INTEGER)
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
     private Long id;
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @BizField(name = "conversationId", type = BizField.FieldType.INTEGER)
     private Long conversationId;
     // 雪花 id 出字符串：JS Number 只有 53 bit，理由见 ImMessageService#payloadOf
+    @BizField(name = "userId", type = BizField.FieldType.INTEGER)
     private Long userId;
     /**
      * 只允许单调前进，写 SQL 上带 {@code last_read_seq < #{seq}} 条件，
      * 乱序到达的旧值改不动新值（返回 0 行而不是把水位回退）
      */
+    @BizField(name = "lastReadSeq", type = BizField.FieldType.INTEGER)
     private Long lastReadSeq;
+    @BizField(name = "createdTime", type = BizField.FieldType.DATETIME)
     private LocalDateTime createdTime;
+    @BizField(name = "updatedTime", type = BizField.FieldType.DATETIME)
     private LocalDateTime updatedTime;
 
     public Long getId() {
@@ -83,3 +92,6 @@ public class ImReadReceiptDO {
         this.updatedTime = updatedTime;
     }
 }
+
+
+
