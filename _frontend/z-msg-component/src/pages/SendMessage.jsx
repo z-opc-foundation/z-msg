@@ -1,9 +1,9 @@
-import {useEffect, useMemo, useState} from 'react'
-import {Alert, Button, Card, Col, Form, Input, Row, Select, Space, Spin, Tag, Typography} from 'antd'
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react'
+import {Alert, Button, Card, Col, Form, Input, Row, Select, Space, Tag, Typography} from 'antd'
 import {SendOutlined} from '@ant-design/icons'
 import {msgApi} from '../services/api'
 
-const {Paragraph, Text} = Typography
+const {Text} = Typography
 
 /**
  * 站内信的收件人字段是 userId（数字），其余通道是「地址」（手机/邮箱/机器人 webhook）。
@@ -32,29 +32,34 @@ const CHANNEL_LABEL = {
 export default function SendMessage() {
     const [form] = Form.useForm()
     const [channels, setChannels] = useState([])
-    const [channel, setChannel] = useState(IN_APP)
+    const channel = Form.useWatch('channel', form) ?? IN_APP
     const [loadingChannels, setLoadingChannels] = useState(true)
     const [sending, setSending] = useState(false)
+    const sendingRef = useRef(false)
     const [result, setResult] = useState(null)
     const [error, setError] = useState(null)
 
-    useEffect(() => {
-        let cancelled = false
-        msgApi.channels()
-            .then((rows) => {
-                if (cancelled) return
-                setChannels(Array.isArray(rows) ? rows : [])
-            })
-            .catch(() => {
-                if (!cancelled) setChannels([])
-            })
-            .finally(() => {
-                if (!cancelled) setLoadingChannels(false)
-            })
-        return () => {
-            cancelled = true
+    const [channelError, setChannelError] = useState(null)
+    const channelRequest = useRef(0)
+    const loadChannels = useCallback(async () => {
+        const version = ++channelRequest.current
+        setLoadingChannels(true)
+        setChannelError(null)
+        try {
+            const rows = await msgApi.channels()
+            if (!Array.isArray(rows)) throw new Error('通道列表响应格式错误')
+            if (version === channelRequest.current) setChannels(rows)
+        } catch (e) {
+            if (version === channelRequest.current) setChannelError(e)
+        } finally {
+            if (version === channelRequest.current) setLoadingChannels(false)
         }
     }, [])
+
+    useEffect(() => {
+        loadChannels()
+        return () => { ++channelRequest.current }
+    }, [loadChannels])
 
     const channelMeta = useMemo(
         () => channels.find((c) => c.channel === channel),
@@ -85,17 +90,15 @@ export default function SendMessage() {
     const isInApp = channel === IN_APP
 
     const handleSend = async () => {
+        // 同步锁覆盖校验等待期，避免连续提交在下一次渲染前同时进入。
+        if (sendingRef.current || channelError) return
+        sendingRef.current = true
+        setSending(true)
         setResult(null)
         setError(null)
-        let values
         try {
-            values = await form.validateFields()
-        } catch {
-            return
-        }
-        setSending(true)
-        try {
-            // ⚠ 字段名用 snake_case：宿主（z-team）的全局 Jackson 策略是 SNAKE_CASE，
+            const values = await form.validateFields()
+            // 字段名用 snake_case：宿主（z-team）的全局 Jackson 策略是 SNAKE_CASE，
             //   camelCase 的键会被**静默丢掉**（不报错，字段变 null）。
             //   服务端 DTO 同时接受 camelCase（@JsonAlias），但客户端按平台口径发 snake_case。
             const payload = {
@@ -106,7 +109,7 @@ export default function SendMessage() {
                 biz_type: values.bizType || undefined,
                 idempotency_key: values.idempotencyKey || undefined,
             }
-            if (isInApp) {
+            if (values.channel === IN_APP) {
                 payload.user_id = Number(values.receiver)
             } else {
                 payload.receiver = values.receiver
@@ -115,29 +118,29 @@ export default function SendMessage() {
             setResult(data)
             form.resetFields()
         } catch (e) {
-            setError(e)
+            if (!e?.errorFields) setError(e)
         } finally {
+            sendingRef.current = false
             setSending(false)
         }
     }
 
     return (
         <div>
-            <Paragraph type="secondary" style={{marginBottom: 12}}>
-                给任何人发消息：站内信按用户 ID，其它通道按地址（手机号 / 邮箱 / 机器人 webhook）。
-                发送走 <Text code>POST /api/msg/send</Text>，身份是当前登录态。
-            </Paragraph>
+            {channelError && <Alert type="error" showIcon style={{marginBottom: 12}}
+                title="通道加载失败" description={channelError.message || String(channelError)}
+                action={<Button onClick={loadChannels}>重试</Button>}/>}
 
             <Card size="small" title="发消息" loading={loadingChannels}>
-                <Form form={form} layout="vertical" onFinish={handleSend}
+                <Form form={form} layout="vertical" onFinish={handleSend} disabled={sending}
                       initialValues={{channel: IN_APP, bizType: 'MANUAL_SEND'}}>
                     <Row gutter={16}>
-                        <Col span={8}>
+                        <Col xs={24} md={8}>
                             <Form.Item name="channel" label="通道" rules={[{required: true}]}>
-                                <Select options={options} onChange={setChannel}/>
+                                <Select options={options}/>
                             </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col xs={24} md={8}>
                             <Form.Item
                                 name="receiver"
                                 label={isInApp ? '收件人用户 ID' : '收件地址'}
@@ -152,7 +155,7 @@ export default function SendMessage() {
                                     placeholder={isInApp ? '如 1001' : '如 13800000000 / a@example.com'}/>
                             </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col xs={24} md={8}>
                             <Form.Item name="subject" label="标题">
                                 <Input placeholder="可空"/>
                             </Form.Item>
@@ -164,17 +167,17 @@ export default function SendMessage() {
                     </Form.Item>
 
                     <Row gutter={16}>
-                        <Col span={8}>
+                        <Col xs={24} md={8}>
                             <Form.Item name="linkUrl" label="跳转链接">
                                 <Input placeholder="可空，如 https://..."/>
                             </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col xs={24} md={8}>
                             <Form.Item name="bizType" label="业务类型">
                                 <Input placeholder="留空则归档为 DIRECT_SEND"/>
                             </Form.Item>
                         </Col>
-                        <Col span={8}>
+                        <Col xs={24} md={8}>
                             <Form.Item name="idempotencyKey" label="幂等键">
                                 <Input placeholder="可空；同键重复发送会被服务端判重"/>
                             </Form.Item>
@@ -186,7 +189,8 @@ export default function SendMessage() {
                                message={`${CHANNEL_LABEL[channel] || channel} 当前只有 mock 兜底 —— 发送会返回成功，但不会真的到达对方`}/>
                     )}
 
-                    <Button type="primary" htmlType="submit" icon={<SendOutlined/>} loading={sending}>
+                    <Button type="primary" htmlType="submit" icon={<SendOutlined/>} loading={sending}
+                            disabled={loadingChannels || Boolean(channelError)}>
                         发送
                     </Button>
                 </Form>

@@ -13,7 +13,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "vite build"
+    "build": "vite build",
+    "test:send-message": "node --test test/send-message.test.mjs"
   },
   "dependencies": {
     "@ant-design/pro-components": "^3.1.12-0",
